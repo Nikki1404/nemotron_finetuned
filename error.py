@@ -20,8 +20,4 @@ for p in [
 PY
 
 
-python3.11 scripts/evaluate_manifest.py \
-  --model /srv/nemotron-3.5-asr-streaming-0.6b.nemo \
-  --manifest data/manifests/test_manifest.json \
-  --language en-US \
-  --output-jsonl results_base.jsonl
+python3.11 scripts/evaluate_manifest.py --model /srv/nemotron-3.5-asr-streaming-0.6b.nemo --manifest data/manifests/test_manifest.json --language en-US --output-jsonl results_base.jsonl
