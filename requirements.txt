@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+websockets
+numpy
+soundfile
+librosa
+scipy
+huggingface_hub
+resampy
