@@ -1,152 +1,505 @@
-cat > scripts/evaluate_manifest.py <<'PY'
-#!/usr/bin/env python3
-import argparse
-import json
-import re
-from pathlib import Path
+root@c6f79d6e94db:/workspace# python3.11 scripts/evaluate_manifest.py --model /srv/nemotron-3.5-asr-streaming-0.6b.nemo --manifest data/manifests/test_manifest.json --language en-US --output-jsonl results_base.jsonl
+OneLogger: Setting error_handling_strategy to DISABLE_QUIETLY_AND_REPORT_METRIC_ERROR for rank (rank=0) with OneLogger disabled. To override: explicitly set error_handling_strategy parameter.
+No exporters were provided. This means that no telemetry data will be collected.
+[eval] Loading model: /srv/nemotron-3.5-asr-streaming-0.6b.nemo
+[NeMo I 2026-06-24 21:06:39 mixins:194] Tokenizer SentencePieceTokenizer initialized with 13087 tokens
+[NeMo W 2026-06-24 21:06:45 modelPT:287] You tried to register an artifact under config key=tokenizer.model_path but an artifact for it has already been registered.
+[NeMo W 2026-06-24 21:06:45 modelPT:287] You tried to register an artifact under config key=tokenizer.vocab_path but an artifact for it has already been registered.
+[NeMo I 2026-06-24 21:06:45 mixins:194] Tokenizer SentencePieceTokenizer initialized with 13087 tokens
+[NeMo W 2026-06-24 21:06:51 modelPT:175] If you intend to do training or fine-tuning, please call the ModelPT.setup_training_data() method and provide a valid configuration file to setup the train data loader.
+    Train config :
+    manifest_filepath: null
+    sample_rate: 16000
+    use_lhotse: true
+    shard_manifests: true
+    batch_duration: 200
+    quadratic_duration: 15
+    num_buckets: 30
+    shuffle: true
+    num_workers: 8
+    pin_memory: true
+    max_duration: 20
+    min_duration: 0.1
+    is_tarred: true
+    tarred_audio_filepaths: null
+    shuffle_n: 2048
+    slice_length: 100
+    bucketing_strategy: fully_randomized
+    bucketing_batch_size: null
+    bucket_buffer_size: 10000
+    shuffle_buffer_size: 10000
+    prompt_field: target_lang
+    prompt_dictionary:
+      en-US: 0
+      en: 0
+      en-GB: 1
+      enGB: 1
+      es-ES: 2
+      esES: 2
+      es-US: 3
+      es: 3
+      zh-CN: 4
+      zh-ZH: 4
+      zh-TW: 5
+      hi-IN: 6
+      hi: 6
+      hi-HI: 6
+      ar-AR: 7
+      ar: 7
+      fr-FR: 8
+      fr: 8
+      de-DE: 9
+      de: 9
+      ja-JP: 10
+      ja-JA: 10
+      ru-RU: 11
+      ru: 11
+      pt-BR: 12
+      pt-PT: 13
+      pt: 13
+      ko-KR: 14
+      ko: 14
+      ko-KO: 14
+      it-IT: 15
+      it: 15
+      nl-NL: 16
+      nl: 16
+      pl-PL: 17
+      pl: 17
+      tr-TR: 18
+      tr: 18
+      uk-UA: 19
+      uk: 19
+      ro-RO: 20
+      ro: 20
+      el-GR: 21
+      el: 21
+      cs-CZ: 22
+      cs: 22
+      hu-HU: 23
+      hu: 23
+      sv-SE: 24
+      sv: 24
+      da-DK: 25
+      da: 25
+      fi-FI: 26
+      fi: 26
+      no-NO: 27
+      'no': 27
+      nb-NO: 103
+      nb: 103
+      nn-NO: 104
+      nn: 104
+      sk-SK: 28
+      sk: 28
+      hr-HR: 29
+      hr: 29
+      bg-BG: 30
+      bg: 30
+      lt-LT: 31
+      lt: 31
+      et-EE: 60
+      et: 60
+      lv-LV: 61
+      lv: 61
+      sl-SI: 62
+      sl: 62
+      th-TH: 32
+      vi-VN: 33
+      id-ID: 34
+      ms-MY: 35
+      bn-IN: 36
+      ur-PK: 37
+      fa-IR: 38
+      ta-IN: 39
+      te-IN: 40
+      mr-IN: 41
+      gu-IN: 42
+      kn-IN: 43
+      ml-IN: 44
+      si-LK: 45
+      ne-NP: 46
+      km-KH: 47
+      sw-KE: 48
+      am-ET: 49
+      ha-NG: 50
+      zu-ZA: 51
+      yo-NG: 52
+      ig-NG: 53
+      af-ZA: 54
+      rw-RW: 55
+      so-SO: 56
+      ny-MW: 57
+      ln-CD: 58
+      or-KE: 59
+      he-IL: 64
+      ku-TR: 65
+      az-AZ: 66
+      ka-GE: 67
+      hy-AM: 68
+      uz-UZ: 69
+      tg-TJ: 70
+      ky-KG: 71
+      qu-PE: 80
+      ay-BO: 81
+      gn-PY: 82
+      nah-MX: 83
+      mi-NZ: 96
+      haw-US: 97
+      sm-WS: 98
+      to-TO: 99
+      fr-CA: 100
+      mt-MT: 102
+      auto: 101
+    num_prompts: 128
+    subsampling_factor: 8
+    lang_field: target_lang
+    training_mode: true
+    input_cfg: null
+    use_bucketing: true
+    defer_setup: true
 
-import torch
-import nemo.collections.asr as nemo_asr
+[NeMo W 2026-06-24 21:06:51 modelPT:182] If you intend to do validation, please call the ModelPT.setup_validation_data() or ModelPT.setup_multiple_validation_data() method and provide a valid configuration file to setup the validation data loader(s).
+    Validation config :
+    manifest_filepath: null
+    sample_rate: 16000
+    batch_size: 2
+    shuffle: false
+    use_start_end_token: false
+    num_workers: 2
+    pin_memory: true
+    batch_duration: null
+    use_lhotse: true
+    use_bucketing: false
+    max_cuts: 8
+    prompt_field: target_lang
+    prompt_dictionary:
+      en-US: 0
+      en: 0
+      en-GB: 1
+      enGB: 1
+      es-ES: 2
+      esES: 2
+      es-US: 3
+      es: 3
+      zh-CN: 4
+      zh-ZH: 4
+      zh-TW: 5
+      hi-IN: 6
+      hi: 6
+      hi-HI: 6
+      ar-AR: 7
+      ar: 7
+      fr-FR: 8
+      fr: 8
+      de-DE: 9
+      de: 9
+      ja-JP: 10
+      ja-JA: 10
+      ru-RU: 11
+      ru: 11
+      pt-BR: 12
+      pt-PT: 13
+      pt: 13
+      ko-KR: 14
+      ko: 14
+      ko-KO: 14
+      it-IT: 15
+      it: 15
+      nl-NL: 16
+      nl: 16
+      pl-PL: 17
+      pl: 17
+      tr-TR: 18
+      tr: 18
+      uk-UA: 19
+      uk: 19
+      ro-RO: 20
+      ro: 20
+      el-GR: 21
+      el: 21
+      cs-CZ: 22
+      cs: 22
+      hu-HU: 23
+      hu: 23
+      sv-SE: 24
+      sv: 24
+      da-DK: 25
+      da: 25
+      fi-FI: 26
+      fi: 26
+      no-NO: 27
+      'no': 27
+      nb-NO: 103
+      nb: 103
+      nn-NO: 104
+      nn: 104
+      sk-SK: 28
+      sk: 28
+      hr-HR: 29
+      hr: 29
+      bg-BG: 30
+      bg: 30
+      lt-LT: 31
+      lt: 31
+      et-EE: 60
+      et: 60
+      lv-LV: 61
+      lv: 61
+      sl-SI: 62
+      sl: 62
+      th-TH: 32
+      vi-VN: 33
+      id-ID: 34
+      ms-MY: 35
+      bn-IN: 36
+      ur-PK: 37
+      fa-IR: 38
+      ta-IN: 39
+      te-IN: 40
+      mr-IN: 41
+      gu-IN: 42
+      kn-IN: 43
+      ml-IN: 44
+      si-LK: 45
+      ne-NP: 46
+      km-KH: 47
+      sw-KE: 48
+      am-ET: 49
+      ha-NG: 50
+      zu-ZA: 51
+      yo-NG: 52
+      ig-NG: 53
+      af-ZA: 54
+      rw-RW: 55
+      so-SO: 56
+      ny-MW: 57
+      ln-CD: 58
+      or-KE: 59
+      he-IL: 64
+      ku-TR: 65
+      az-AZ: 66
+      ka-GE: 67
+      hy-AM: 68
+      uz-UZ: 69
+      tg-TJ: 70
+      ky-KG: 71
+      qu-PE: 80
+      ay-BO: 81
+      gn-PY: 82
+      nah-MX: 83
+      mi-NZ: 96
+      haw-US: 97
+      sm-WS: 98
+      to-TO: 99
+      fr-CA: 100
+      mt-MT: 102
+      auto: 101
+    num_prompts: 128
+    subsampling_factor: 8
+    training_mode: true
+    name: null
 
+[NeMo W 2026-06-24 21:06:51 modelPT:189] Please call the ModelPT.setup_test_data() or ModelPT.setup_multiple_test_data() method and provide a valid configuration file to setup the test data loader(s).
+    Test config :
+    manifest_filepath: null
+    sample_rate: 16000
+    batch_size: 16
+    shuffle: false
+    use_start_end_token: false
+    num_workers: 8
+    pin_memory: true
+    use_lhotse: true
+    use_bucketing: false
+    prompt_field: target_lang
+    prompt_dictionary:
+      en-US: 0
+      en: 0
+      en-GB: 1
+      enGB: 1
+      es-ES: 2
+      esES: 2
+      es-US: 3
+      es: 3
+      zh-CN: 4
+      zh-ZH: 4
+      zh-TW: 5
+      hi-IN: 6
+      hi: 6
+      hi-HI: 6
+      ar-AR: 7
+      ar: 7
+      fr-FR: 8
+      fr: 8
+      de-DE: 9
+      de: 9
+      ja-JP: 10
+      ja-JA: 10
+      ru-RU: 11
+      ru: 11
+      pt-BR: 12
+      pt-PT: 13
+      pt: 13
+      ko-KR: 14
+      ko: 14
+      ko-KO: 14
+      it-IT: 15
+      it: 15
+      nl-NL: 16
+      nl: 16
+      pl-PL: 17
+      pl: 17
+      tr-TR: 18
+      tr: 18
+      uk-UA: 19
+      uk: 19
+      ro-RO: 20
+      ro: 20
+      el-GR: 21
+      el: 21
+      cs-CZ: 22
+      cs: 22
+      hu-HU: 23
+      hu: 23
+      sv-SE: 24
+      sv: 24
+      da-DK: 25
+      da: 25
+      fi-FI: 26
+      fi: 26
+      no-NO: 27
+      'no': 27
+      nb-NO: 103
+      nb: 103
+      nn-NO: 104
+      nn: 104
+      sk-SK: 28
+      sk: 28
+      hr-HR: 29
+      hr: 29
+      bg-BG: 30
+      bg: 30
+      lt-LT: 31
+      lt: 31
+      et-EE: 60
+      et: 60
+      lv-LV: 61
+      lv: 61
+      sl-SI: 62
+      sl: 62
+      th-TH: 32
+      vi-VN: 33
+      id-ID: 34
+      ms-MY: 35
+      bn-IN: 36
+      ur-PK: 37
+      fa-IR: 38
+      ta-IN: 39
+      te-IN: 40
+      mr-IN: 41
+      gu-IN: 42
+      kn-IN: 43
+      ml-IN: 44
+      si-LK: 45
+      ne-NP: 46
+      km-KH: 47
+      sw-KE: 48
+      am-ET: 49
+      ha-NG: 50
+      zu-ZA: 51
+      yo-NG: 52
+      ig-NG: 53
+      af-ZA: 54
+      rw-RW: 55
+      so-SO: 56
+      ny-MW: 57
+      ln-CD: 58
+      or-KE: 59
+      he-IL: 64
+      ku-TR: 65
+      az-AZ: 66
+      ka-GE: 67
+      hy-AM: 68
+      uz-UZ: 69
+      tg-TJ: 70
+      ky-KG: 71
+      qu-PE: 80
+      ay-BO: 81
+      gn-PY: 82
+      nah-MX: 83
+      mi-NZ: 96
+      haw-US: 97
+      sm-WS: 98
+      to-TO: 99
+      fr-CA: 100
+      mt-MT: 102
+      auto: 101
+    num_prompts: 128
+    subsampling_factor: 8
+    training_mode: false
 
-def norm_text(s: str) -> str:
-    s = s.lower()
-    s = re.sub(r"[^a-z0-9ñáéíóúü\s]", " ", s)
-    s = re.sub(r"\s+", " ", s).strip()
-    return s
-
-
-def edit_distance(a, b):
-    dp = [[0] * (len(b) + 1) for _ in range(len(a) + 1)]
-    for i in range(len(a) + 1):
-        dp[i][0] = i
-    for j in range(len(b) + 1):
-        dp[0][j] = j
-    for i in range(1, len(a) + 1):
-        for j in range(1, len(b) + 1):
-            cost = 0 if a[i - 1] == b[j - 1] else 1
-            dp[i][j] = min(
-                dp[i - 1][j] + 1,
-                dp[i][j - 1] + 1,
-                dp[i - 1][j - 1] + cost,
-            )
-    return dp[-1][-1]
-
-
-def wer(ref, hyp):
-    r = norm_text(ref).split()
-    h = norm_text(hyp).split()
-    if not r:
-        return 0.0 if not h else 100.0
-    return 100.0 * edit_distance(r, h) / len(r)
-
-
-def cer(ref, hyp):
-    r = norm_text(ref).replace(" ", "")
-    h = norm_text(hyp).replace(" ", "")
-    if not r:
-        return 0.0 if not h else 100.0
-    return 100.0 * edit_distance(list(r), list(h)) / len(r)
-
-
-def extract_text(x):
-    if isinstance(x, str):
-        return x
-    if isinstance(x, list) and x:
-        return extract_text(x[0])
-    if hasattr(x, "text"):
-        return x.text
-    if isinstance(x, dict):
-        return x.get("text") or x.get("pred_text") or str(x)
-    return str(x)
-
-
-def transcribe_one(model, audio_path, language):
-    # Nemotron prompt model supports set_default_prompt / change_decoding_strategy in some NeMo builds.
-    # Try all safe options, then call transcribe on one file.
-    try:
-        model.set_default_prompt(language)
-    except Exception:
-        pass
-
-    try:
-        model.set_inference_prompt(language)
-    except Exception:
-        pass
-
-    with torch.no_grad():
-        out = model.transcribe([audio_path], batch_size=1, verbose=False)
-
-    return extract_text(out)
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model", required=True)
-    parser.add_argument("--manifest", required=True)
-    parser.add_argument("--language", default="en-US")
-    parser.add_argument("--device", default="cuda")
-    parser.add_argument("--output-jsonl", default="eval_predictions.jsonl")
-    args = parser.parse_args()
-
-    manifest = Path(args.manifest)
-    rows = [json.loads(line) for line in manifest.read_text().splitlines() if line.strip()]
-
-    print(f"[eval] Loading model: {args.model}")
-    model = nemo_asr.models.ASRModel.restore_from(args.model, map_location=args.device)
-    model.eval()
-    model = model.to(args.device)
-
-    print(f"[eval] Files: {len(rows)}")
-    total_wer = 0.0
-    total_cer = 0.0
-    outputs = []
-
-    for idx, row in enumerate(rows, start=1):
-        audio = row["audio_filepath"]
-        ref = row.get("text", "")
-        lang = row.get("target_lang") or row.get("language") or args.language
-
-        print(f"[eval] {idx}/{len(rows)} {audio} lang={lang}")
-        hyp = transcribe_one(model, audio, lang)
-
-        row_wer = wer(ref, hyp)
-        row_cer = cer(ref, hyp)
-
-        total_wer += row_wer
-        total_cer += row_cer
-
-        outputs.append({
-            "audio_filepath": audio,
-            "language": lang,
-            "reference": ref,
-            "prediction": hyp,
-            "wer": row_wer,
-            "cer": row_cer,
-        })
-
-        print(f"  WER: {row_wer:.2f}% | CER: {row_cer:.2f}%")
-        print(f"  PRED: {hyp[:300]}")
-
-    avg_wer = total_wer / max(1, len(rows))
-    avg_cer = total_cer / max(1, len(rows))
-
-    with open(args.output_jsonl, "w", encoding="utf-8") as f:
-        for o in outputs:
-            f.write(json.dumps(o, ensure_ascii=False) + "\n")
-
-    print("\n========== SUMMARY ==========")
-    print(f"Files: {len(rows)}")
-    print(f"Average WER: {avg_wer:.2f}%")
-    print(f"Average CER: {avg_cer:.2f}%")
-    print(f"Saved predictions: {args.output_jsonl}")
-
-
-if __name__ == "__main__":
+[NeMo I 2026-06-24 21:06:59 rnnt_models:226] Using RNNT Loss : warprnnt_numba
+    Loss warprnnt_numba_kwargs: {'fastemit_lambda': 0.005, 'clamp': -1.0}
+[NeMo I 2026-06-24 21:06:59 rnnt_models:226] Using RNNT Loss : warprnnt_numba
+    Loss warprnnt_numba_kwargs: {'fastemit_lambda': 0.005, 'clamp': -1.0}
+[NeMo I 2026-06-24 21:06:59 rnnt_models:226] Using RNNT Loss : warprnnt_numba
+    Loss warprnnt_numba_kwargs: {'fastemit_lambda': 0.005, 'clamp': -1.0}
+[NeMo I 2026-06-24 21:06:59 rnnt_bpe_models_prompt:146] Model with prompt feature has been initialized (RNNT-only)
+[NeMo I 2026-06-24 21:07:01 save_restore_connector:287] Model EncDecRNNTBPEModelWithPrompt was successfully restored from /srv/nemotron-3.5-asr-streaming-0.6b.nemo.
+[eval] Files: 1
+[eval] 1/1 /workspace/data/audio_16k/account_not_found_bank_issue.wav lang=en-US
+[NeMo I 2026-06-24 21:07:01 mixins:969] Inference prompt set to 'en-US' (index 0)
+[NeMo W 2026-06-24 21:07:02 dataloader:881] The following configuration keys are ignored by Lhotse dataloader: num_prompts,default_lang,window_stride,subsampling_factor,prompt_dictionary,labels,initialize_prompt_feature,trim_silence
+[NeMo W 2026-06-24 21:07:02 dataloader:533] You are using a non-tarred dataset and requested tokenization during data sampling (pretokenize=True). This will cause the tokenization to happen in the main (GPU) process,possibly impacting the training speed if your tokenizer is very large.If the impact is noticable, set pretokenize=False in dataloader config.(note: that will disable token-per-second filtering and 2D bucketing features)
+Traceback (most recent call last):
+  File "/workspace/scripts/evaluate_manifest.py", line 145, in <module>
     main()
-PY
-
-
-
-
-python3.11 scripts/evaluate_manifest.py --model /srv/nemotron-3.5-asr-streaming-0.6b.nemo --manifest data/manifests/test_manifest.json --language en-US --output-jsonl results_base.jsonl
+  File "/workspace/scripts/evaluate_manifest.py", line 110, in main
+    hyp = transcribe_one(model, audio, lang)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scripts/evaluate_manifest.py", line 77, in transcribe_one
+    out = model.transcribe([audio_path], batch_size=1, verbose=False)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/nemo/collections/asr/models/rnnt_bpe_models_prompt.py", line 629, in transcribe
+    return super().transcribe(
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/nemo/collections/asr/models/rnnt_models.py", line 317, in transcribe
+    return super().transcribe(
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/nemo/collections/asr/parts/mixins/transcription.py", line 298, in transcribe
+    for processed_outputs in generator:
+  File "/usr/local/lib/python3.11/site-packages/nemo/collections/asr/parts/mixins/transcription.py", line 393, in transcribe_generator
+    for test_batch in tqdm(dataloader, desc="Transcribing", disable=not verbose):
+  File "/usr/local/lib/python3.11/site-packages/tqdm/std.py", line 1169, in __iter__
+    for obj in iterable:
+  File "/usr/local/lib/python3.11/site-packages/torch/utils/data/dataloader.py", line 708, in __next__
+    data = self._next_data()
+           ^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/torch/utils/data/dataloader.py", line 764, in _next_data
+    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/torch/utils/data/_utils/fetch.py", line 54, in fetch
+    data = self.dataset[possibly_batched_index]
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/nemo/collections/asr/data/audio_to_text_lhotse_prompt_index.py", line 142, in __getitem__
+    prompt_indices = torch.tensor([self._get_prompt_index_for_cut(c) for c in cuts], dtype=torch.long)
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/nemo/collections/asr/data/audio_to_text_lhotse_prompt_index.py", line 142, in <listcomp>
+    prompt_indices = torch.tensor([self._get_prompt_index_for_cut(c) for c in cuts], dtype=torch.long)
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/nemo/collections/asr/data/audio_to_text_lhotse_prompt_index.py", line 130, in _get_prompt_index_for_cut
+    return self._get_prompt_index(cut.supervisions[0].language)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/nemo/collections/asr/data/audio_to_text_lhotse_prompt_index.py", line 96, in _get_prompt_index
+    raise ValueError(
+ValueError: Unknown prompt key: 'None'. Available: ['en-US', 'en', 'en-GB', 'enGB', 'es-ES', 'esES', 'es-US', 'es', 'zh-CN', 'zh-ZH']...
+root@c6f79d6e94db:/workspace#
