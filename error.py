@@ -1,70 +1,152 @@
-      fr-CA: 100
-      mt-MT: 102
-      auto: 101
-    num_prompts: 128
-    subsampling_factor: 8
-    training_mode: false
+cat > scripts/evaluate_manifest.py <<'PY'
+#!/usr/bin/env python3
+import argparse
+import json
+import re
+from pathlib import Path
 
-[NeMo I 2026-06-24 20:51:57 rnnt_models:226] Using RNNT Loss : warprnnt_numba
-    Loss warprnnt_numba_kwargs: {'fastemit_lambda': 0.005, 'clamp': -1.0}
-[NeMo I 2026-06-24 20:51:57 rnnt_models:226] Using RNNT Loss : warprnnt_numba
-    Loss warprnnt_numba_kwargs: {'fastemit_lambda': 0.005, 'clamp': -1.0}
-[NeMo I 2026-06-24 20:51:57 rnnt_models:226] Using RNNT Loss : warprnnt_numba
-    Loss warprnnt_numba_kwargs: {'fastemit_lambda': 0.005, 'clamp': -1.0}
-[NeMo I 2026-06-24 20:51:57 rnnt_bpe_models_prompt:146] Model with prompt feature has been initialized (RNNT-only)
-[NeMo I 2026-06-24 20:52:00 save_restore_connector:287] Model EncDecRNNTBPEModelWithPrompt was successfully restored from /srv/nemotron-3.5-asr-streaming-0.6b.nemo.
-[NeMo I 2026-06-24 20:52:00 mixins:969] Inference prompt set to 'en-US' (index 0)
-[eval] Loaded model: /srv/nemotron-3.5-asr-streaming-0.6b.nemo
-[eval] Files: 1
-[NeMo W 2026-06-24 20:52:01 dataloader:881] The following configuration keys are ignored by Lhotse dataloader: subsampling_factor,prompt_dictionary,trim_silence,labels,num_prompts,window_stride,default_lang,initialize_prompt_feature
-[NeMo W 2026-06-24 20:52:01 dataloader:533] You are using a non-tarred dataset and requested tokenization during data sampling (pretokenize=True). This will cause the tokenization to happen in the main (GPU) process,possibly impacting the training speed if your tokenizer is very large.If the impact is noticable, set pretokenize=False in dataloader config.(note: that will disable token-per-second filtering and 2D bucketing features)
-Transcribing: 0it [00:00, ?it/s]
-Traceback (most recent call last):
-  File "/workspace/scripts/evaluate_manifest.py", line 136, in <module>
+import torch
+import nemo.collections.asr as nemo_asr
+
+
+def norm_text(s: str) -> str:
+    s = s.lower()
+    s = re.sub(r"[^a-z0-9ñáéíóúü\s]", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+def edit_distance(a, b):
+    dp = [[0] * (len(b) + 1) for _ in range(len(a) + 1)]
+    for i in range(len(a) + 1):
+        dp[i][0] = i
+    for j in range(len(b) + 1):
+        dp[0][j] = j
+    for i in range(1, len(a) + 1):
+        for j in range(1, len(b) + 1):
+            cost = 0 if a[i - 1] == b[j - 1] else 1
+            dp[i][j] = min(
+                dp[i - 1][j] + 1,
+                dp[i][j - 1] + 1,
+                dp[i - 1][j - 1] + cost,
+            )
+    return dp[-1][-1]
+
+
+def wer(ref, hyp):
+    r = norm_text(ref).split()
+    h = norm_text(hyp).split()
+    if not r:
+        return 0.0 if not h else 100.0
+    return 100.0 * edit_distance(r, h) / len(r)
+
+
+def cer(ref, hyp):
+    r = norm_text(ref).replace(" ", "")
+    h = norm_text(hyp).replace(" ", "")
+    if not r:
+        return 0.0 if not h else 100.0
+    return 100.0 * edit_distance(list(r), list(h)) / len(r)
+
+
+def extract_text(x):
+    if isinstance(x, str):
+        return x
+    if isinstance(x, list) and x:
+        return extract_text(x[0])
+    if hasattr(x, "text"):
+        return x.text
+    if isinstance(x, dict):
+        return x.get("text") or x.get("pred_text") or str(x)
+    return str(x)
+
+
+def transcribe_one(model, audio_path, language):
+    # Nemotron prompt model supports set_default_prompt / change_decoding_strategy in some NeMo builds.
+    # Try all safe options, then call transcribe on one file.
+    try:
+        model.set_default_prompt(language)
+    except Exception:
+        pass
+
+    try:
+        model.set_inference_prompt(language)
+    except Exception:
+        pass
+
+    with torch.no_grad():
+        out = model.transcribe([audio_path], batch_size=1, verbose=False)
+
+    return extract_text(out)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", required=True)
+    parser.add_argument("--manifest", required=True)
+    parser.add_argument("--language", default="en-US")
+    parser.add_argument("--device", default="cuda")
+    parser.add_argument("--output-jsonl", default="eval_predictions.jsonl")
+    args = parser.parse_args()
+
+    manifest = Path(args.manifest)
+    rows = [json.loads(line) for line in manifest.read_text().splitlines() if line.strip()]
+
+    print(f"[eval] Loading model: {args.model}")
+    model = nemo_asr.models.ASRModel.restore_from(args.model, map_location=args.device)
+    model.eval()
+    model = model.to(args.device)
+
+    print(f"[eval] Files: {len(rows)}")
+    total_wer = 0.0
+    total_cer = 0.0
+    outputs = []
+
+    for idx, row in enumerate(rows, start=1):
+        audio = row["audio_filepath"]
+        ref = row.get("text", "")
+        lang = row.get("target_lang") or row.get("language") or args.language
+
+        print(f"[eval] {idx}/{len(rows)} {audio} lang={lang}")
+        hyp = transcribe_one(model, audio, lang)
+
+        row_wer = wer(ref, hyp)
+        row_cer = cer(ref, hyp)
+
+        total_wer += row_wer
+        total_cer += row_cer
+
+        outputs.append({
+            "audio_filepath": audio,
+            "language": lang,
+            "reference": ref,
+            "prediction": hyp,
+            "wer": row_wer,
+            "cer": row_cer,
+        })
+
+        print(f"  WER: {row_wer:.2f}% | CER: {row_cer:.2f}%")
+        print(f"  PRED: {hyp[:300]}")
+
+    avg_wer = total_wer / max(1, len(rows))
+    avg_cer = total_cer / max(1, len(rows))
+
+    with open(args.output_jsonl, "w", encoding="utf-8") as f:
+        for o in outputs:
+            f.write(json.dumps(o, ensure_ascii=False) + "\n")
+
+    print("\n========== SUMMARY ==========")
+    print(f"Files: {len(rows)}")
+    print(f"Average WER: {avg_wer:.2f}%")
+    print(f"Average CER: {avg_cer:.2f}%")
+    print(f"Saved predictions: {args.output_jsonl}")
+
+
+if __name__ == "__main__":
     main()
-  File "/workspace/scripts/evaluate_manifest.py", line 96, in main
-    hyps = model.transcribe(audio_files, batch_size=args.batch_size)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
-    return func(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/nemo/collections/asr/models/rnnt_bpe_models_prompt.py", line 629, in transcribe
-    return super().transcribe(
-           ^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
-    return func(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/nemo/collections/asr/models/rnnt_models.py", line 317, in transcribe
-    return super().transcribe(
-           ^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
-    return func(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/nemo/collections/asr/parts/mixins/transcription.py", line 298, in transcribe
-    for processed_outputs in generator:
-  File "/usr/local/lib/python3.11/site-packages/nemo/collections/asr/parts/mixins/transcription.py", line 393, in transcribe_generator
-    for test_batch in tqdm(dataloader, desc="Transcribing", disable=not verbose):
-  File "/usr/local/lib/python3.11/site-packages/tqdm/std.py", line 1181, in __iter__
-    for obj in iterable:
-  File "/usr/local/lib/python3.11/site-packages/torch/utils/data/dataloader.py", line 708, in __next__
-    data = self._next_data()
-           ^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/torch/utils/data/dataloader.py", line 764, in _next_data
-    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/torch/utils/data/_utils/fetch.py", line 54, in fetch
-    data = self.dataset[possibly_batched_index]
-           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/nemo/collections/asr/data/audio_to_text_lhotse_prompt_index.py", line 142, in __getitem__
-    prompt_indices = torch.tensor([self._get_prompt_index_for_cut(c) for c in cuts], dtype=torch.long)
-                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/nemo/collections/asr/data/audio_to_text_lhotse_prompt_index.py", line 142, in <listcomp>
-    prompt_indices = torch.tensor([self._get_prompt_index_for_cut(c) for c in cuts], dtype=torch.long)
-                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/nemo/collections/asr/data/audio_to_text_lhotse_prompt_index.py", line 130, in _get_prompt_index_for_cut
-    return self._get_prompt_index(cut.supervisions[0].language)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/nemo/collections/asr/data/audio_to_text_lhotse_prompt_index.py", line 96, in _get_prompt_index
-    raise ValueError(
-ValueError: Unknown prompt key: 'None'. Available: ['en-US', 'en', 'en-GB', 'enGB', 'es-ES', 'esES', 'es-US', 'es', 'zh-CN', 'zh-ZH']...
-root@c6f79d6e94db:/works
+PY
+
+
+
+
+python3.11 scripts/evaluate_manifest.py --model /srv/nemotron-3.5-asr-streaming-0.6b.nemo --manifest data/manifests/test_manifest.json --language en-US --output-jsonl results_base.jsonl
