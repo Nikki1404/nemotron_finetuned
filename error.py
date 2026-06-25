@@ -1,84 +1,372 @@
-NeMo I 2026-06-25 11:24:35 wer:318]
+#!/usr/bin/env python3
 
-[NeMo I 2026-06-25 11:24:35 wer:319] WER reference:hi hello thank you for calling inspira financial
-[NeMo I 2026-06-25 11:24:35 wer:320] WER predicted:New address you'd like to update in your account is one twenty three Stain
-Epoch 0:  84%|████████████████████████████████████████████████████████████████▉            | 70/83 [00:13<00:02,  5.36it/s, v_num=4][NeMo I 2026-06-25 11:24:36 wer:318]
+import argparse
+import csv
+import json
+import re
+import subprocess
+import wave
+from difflib import SequenceMatcher
+from pathlib import Path
 
-[NeMo I 2026-06-25 11:24:36 wer:319] WER reference:hi hello thank you for calling inspira financial
-[NeMo I 2026-06-25 11:24:36 wer:320] WER predicted:To help you with that, you'll need to verify your identity. <en-US> Can I please get your four digit member ID? <en-US> Sure it's twenty forty three. <en-US>
-Epoch 0:  86%|█████████████████████████████████████████████████████████████████▊           | 71/83 [00:13<00:02,  5.37it/s, v_num=4][NeMo I 2026-06-25 11:24:36 wer:318]
+import torch
+import nemo.collections.asr as nemo_asr
 
-[NeMo I 2026-06-25 11:24:36 wer:319] WER reference:hi hello thank you for calling inspira financial
-[NeMo I 2026-06-25 11:24:36 wer:320] WER predicted:Transaction at all okay since this transaction was made by you, I will create a support ticket to report this as an
-Epoch 0:  87%|██████████████████████████████████████████████████████████████████▊          | 72/83 [00:13<00:02,  5.38it/s, v_num=4][NeMo I 2026-06-25 11:24:36 wer:318]
 
-[NeMo I 2026-06-25 11:24:36 wer:319] WER reference:hi hello thank you for calling inspira financial
-[NeMo I 2026-06-25 11:24:36 wer:320] WER predicted:Can help you with that first I need to verify your identity. <en-US> Can I get your four member ID? <en-US> Sure, it's twenty forty three
-Epoch 0:  88%|███████████████████████████████████████████████████████████████████▋         | 73/83 [00:13<00:01,  5.40it/s, v_num=4][NeMo I 2026-06-25 11:24:36 wer:318]
+def norm_name(s):
+    s = s.lower()
+    s = re.sub(r"[^a-z0-9]+", "_", s)
+    return s.strip("_")
 
-[NeMo I 2026-06-25 11:24:36 wer:319] WER reference:hi hello thank you for calling inspira financial
-[NeMo I 2026-06-25 11:24:36 wer:320] WER predicted:Okay, is there anything else I can help you with today? <en-US> No thanks. <en-US> Thank you for calling Inspira Financial Have a nice day. <en-US>
-Epoch 0:  89%|████████████████████████████████████████████████████████████████████▋        | 74/83 [00:13<00:01,  5.41it/s, v_num=4][NeMo I 2026-06-25 11:24:36 wer:318]
 
-[NeMo I 2026-06-25 11:24:36 wer:319] WER reference:hi hello thank you for calling inspira financial
-[NeMo I 2026-06-25 11:24:36 wer:320] WER predicted:Go ahead and block it immediately. <en-US> Okay, I am processing that new record has been fucking deactivated
-Epoch 0:  90%|█████████████████████████████████████████████████████████████████████▌       | 75/83 [00:13<00:01,  5.42it/s, v_num=4][NeMo I 2026-06-25 11:24:36 wer:318]
+def clean_text(s):
+    s = s.lower()
+    s = s.replace("’", "'")
+    s = re.sub(r"[^a-z0-9ñáéíóúü\s]", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
 
-[NeMo I 2026-06-25 11:24:36 wer:319] WER reference:hi hello thank you for calling inspira financial
-[NeMo I 2026-06-25 11:24:36 wer:320] WER predicted:That makes sense. <en-US> Would you like to know about enrollment timelines and payment models? <en-US> Yeah, maybe later for now I think this
-Epoch 0:  92%|██████████████████████████████████████████████████████████████████████▌      | 76/83 [00:13<00:01,  5.44it/s, v_num=4][NeMo I 2026-06-25 11:24:37 wer:318]
 
-[NeMo I 2026-06-25 11:24:37 wer:319] WER reference:hi hello thank you for calling inspira financial
-[NeMo I 2026-06-25 11:24:37 wer:320] WER predicted:Before we proceed, I need to verify your identity. <en-US> Can I please get your four digit number ID four it's two zero
-Epoch 0:  93%|███████████████████████████████████████████████████████████████████████▍     | 77/83 [00:14<00:01,  5.45it/s, v_num=4][NeMo I 2026-06-25 11:24:37 wer:318]
+def duration_sec(wav_path):
+    with wave.open(str(wav_path), "rb") as w:
+        return w.getnframes() / w.getframerate()
 
-[NeMo I 2026-06-25 11:24:37 wer:319] WER reference:hi hello thank you for calling inspira financial
-[NeMo I 2026-06-25 11:24:37 wer:320] WER predicted:Okay, I used the latest transaction now the most recent transaction on your card ending in five zero nine one was a seven hundred
-Epoch 0:  94%|████████████████████████████████████████████████████████████████████████▎    | 78/83 [00:14<00:00,  5.46it/s, v_num=4][NeMo I 2026-06-25 11:24:37 wer:318]
 
-[NeMo I 2026-06-25 11:24:37 wer:319] WER reference:hi hello thank you for calling inspira financial
-[NeMo I 2026-06-25 11:24:37 wer:320] WER predicted:Right now would direct me to create a service ticket. <en-US> Team can investigate the weather. <en-US> You believe go ahead
-Epoch 0:  95%|█████████████████████████████████████████████████████████████████████████▎   | 79/83 [00:14<00:00,  5.47it/s, v_num=4][NeMo I 2026-06-25 11:24:37 wer:318]
+def patch_nemotron_prompt(default_lang):
+    import inspect
+    import nemo.collections.asr.data.audio_to_text_lhotse_prompt_index as mod
 
-[NeMo I 2026-06-25 11:24:37 wer:319] WER reference:hi hello thank you for calling inspira financial
-[NeMo I 2026-06-25 11:24:37 wer:320] WER predicted:Okay, but it has already been about a week and I still have not received it since I'm a bit concerned. <en-US> Yeah, I
-Epoch 0:  96%|██████████████████████████████████████████████████████████████████████████▏  | 80/83 [00:14<00:00,  5.48it/s, v_num=4][NeMo I 2026-06-25 11:24:37 wer:318]
+    for _, cls in vars(mod).items():
+        if inspect.isclass(cls) and hasattr(cls, "_get_prompt_index"):
+            old_fn = cls._get_prompt_index
 
-[NeMo I 2026-06-25 11:24:37 wer:319] WER reference:hi hello thank you for calling inspira financial
-[NeMo I 2026-06-25 11:24:37 wer:320] WER predicted:Anotho used transaction your ticket number is TKT four five D four two E six B. <en-US> I will report that TKT four five D. <en-US>
-Epoch 0:  98%|███████████████████████████████████████████████████████████████████████████▏ | 81/83 [00:14<00:00,  5.50it/s, v_num=4][NeMo I 2026-06-25 11:24:37 wer:318]
+            def new_get_prompt_index(self, prompt_key, _old_fn=old_fn):
+                if prompt_key is None or str(prompt_key).lower() == "none":
+                    prompt_key = default_lang
+                return _old_fn(self, prompt_key)
 
-[NeMo I 2026-06-25 11:24:37 wer:319] WER reference:hi hello thank you for calling inspira financial
-[NeMo I 2026-06-25 11:24:37 wer:320] WER predicted:Based on your information, your cobra coverage is provided through EtNA and includes medical tools and vision benefits. <en-US> This coverage is essentially the same as what you
-Epoch 0:  99%|████████████████████████████████████████████████████████████████████████████ | 82/83 [00:14<00:00,  5.50it/s, v_num=4][NeMo I 2026-06-25 11:24:37 wer:318]
+            cls._get_prompt_index = new_get_prompt_index
 
-[NeMo I 2026-06-25 11:24:37 wer:319] WER reference:hi hello thank you for calling inspira financial
-[NeMo I 2026-06-25 11:24:37 wer:320] WER predicted:Social security number that is twelve thirty four. <en-US> Thank you for confirming your identity. <en-US> I can see that
-Epoch 0: 100%|█████████████████████████████████████████████████████████████████████████████| 83/83 [00:15<00:00,  5.52it/s, v_num=4][NeMo I 2026-06-25 11:24:37 asr_model:185] CUDA graphs enabled for EncDecRNNTBPEModelWithPrompt::RNNTBPEDecoding::GreedyBatchedRNNTInfer
-                                                                                                                                    [NeMo W 2026-06-25 11:24:38 label_looping_base:165] Full CUDA graph compilation failed: CUDA failure! <cudaError_t.cudaErrorInsufficientDriver: 35>. Falling back to native PyTorch CUDA graphs. Decoding will be slower.
-[NeMo I 2026-06-25 11:24:40 wer:318]
 
-[NeMo I 2026-06-25 11:24:40 wer:319] WER reference:hi hello thank you for calling inspira financial what can i help you with today i would also like to withdraw money from my account to help you with that i ll need to verify your identity can i please get your four digit member id sure its 2043 great now may i have the last four digits of your social security number yeah that s 1234 thank you for verification for the money withdrawal i am generating a secure link a secure distribution link has been sent via sms to your phone number ending in 4678 please note that processing typically takes up to 5 business days a 25 closing fee applies and any applicable taxes or penalties will be reported on form 1099 is there anything else i can help you with today no thanks thank you have a nice day
-[NeMo I 2026-06-25 11:24:40 wer:320] WER predicted:Hi hello, thank you for calling Inspira Financial. <en-US> What can I help you with today? <en-US> I would like to withdraw money from my account to help you with that I'll need to verify your identity. <en-US> Can I please get your four digit member ID? <en-US> Sure, it's twenty forty three right now. <en-US> May I have the last four digits of your social security number that's twelve thirty four. <en-US> Thank you for verification for the money withdrawal I am generating a secure link a secure distribution link has been sent via SMS to your phone number ending in forty six seventy eight. <en-US> Please note that processing typically takes up to five business days a twenty five dollars closing fee applies and any applicable taxes or penalties will be reported on Form ten ninety nine is there anything else I can help you with today? <en-US> No thanks. <en-US> Thank you. <en-US> Have a nice day. <en-US>
-                                                                                                                                    [NeMo I 2026-06-25 11:24:40 asr_model:198] CUDA graphs disabled for EncDecRNNTBPEModelWithPrompt::RNNTBPEDecoding::GreedyBatchedRNNTInfer
-Epoch 0: 100%|█████████████████████████████████████████████████████████████████████████████| 83/83 [00:17<00:00,  4.77it/s, v_num=4][NeMo I 2026-06-25 11:24:40 asr_model:185] CUDA graphs enabled for EncDecRNNTBPEModelWithPrompt::RNNTBPEDecoding::GreedyBatchedRNNTInfer
-`Trainer.fit` stopped: `max_epochs=1` reached.
-Epoch 0: 100%|█████████████████████████████████████████████████████████████████████████████| 83/83 [00:17<00:00,  4.76it/s, v_num=4]
-[done] Fine-tuned model saved to: /srv/models/nemotron_inspira_decoder_ft.nemo
-root@c6f79d6e94db:/workspace# wc -l data/manifest/train_manifest.json
-wc: data/manifest/train_manifest.json: No such file or directory
-root@c6f79d6e94db:/workspace# wc -l data/manifests/train_manifest.json
-5 data/manifests/train_manifest.json
-root@c6f79d6e94db:/workspace# cat data/manifests/train_manifest.json
-{"audio_filepath": "/workspace/data/audio_16k/card_lost.wav", "duration": 191.208, "text": "hi hello yeah i am calling because i lost my inspira debit card yesterday evening somewhere around maybe six thirty or seven pm and i am not able to find it anywhere so i want to report it and make sure it is blocked immediately uh because i am worried someone else might use it hello thank you for calling inspira financial what can i help you with today i understand your concern and i will help you with this request before we proceed i need to verify your identity can i please get your four digit member id sure its two zero four three 2043 okay just to confirm your member id is 2 0 4 3 right yes that is correct great now may i have the last four digits of your social security number yeah that is one two three four 1234 thank you for confirming your identity you have been successfully verified now to proceed with your lost card request please provide the last four digits of the inspira card you lost yeah i think it is five zero nine one 5091 okay your card ending in 5 0 9 1 has been verified would you like me to proceed with deactivating this card now yes please go ahead and block it immediately okay i am processing that now your card has been successfully deactivated no further transactions can be made using this card okay that is good thank you now before we order a replacement would you like me to check your recent transactions to ensure there is no suspicious activity yes please check that i want to be sure okay i am checking your latest transaction now the most recent transaction on your card ending in 5 0 9 1 was a seven hundred dollar medical claim reimbursement that is 700 dollars can you confirm if this transaction was made by you no i did not make that transaction at all okay since this transaction was not made by you i will create a support ticket to report this as an unauthorized transaction your ticket number is t k t 4 5 d 4 2 e 6 b i will repeat that t k t 4 5 d 4 2 e 6 b please note this number for future reference yeah i got it thanks now would you like me to place an order for a replacement inspira debit card yes please i need a new card okay we have two options standard delivery which takes seven to ten business days and expedited delivery which takes two to three business days which one would you prefer standard delivery is fine okay i have placed the order your new card will arrive within seven to ten business days your service request number is t k t 9 d 3 8 1 7 d 6 i will repeat that t k t 9 d 3 8 1 7 d 6 once you receive the card please activate it through the app or call the activation number also i recommend monitoring your account for any unusual activity over the next few days yeah i will do that okay is there anything else i can help you with today no thanks that is all thank you for calling inspira financial have a nice day", "use_case": "Card Lost", "target_lang": "en-US", "language": "en-US"}
-{"audio_filepath": "/workspace/data/audio_16k/cobra_coverage_faq.wav", "duration": 97.224, "text": "hi hello i recently left my employer and i received a large packet in the mail regarding benefits and i am trying to understand my options especially related to cobra coverage hello thank you for calling inspira financial i can definitely help you with that but first i need to verify your identity can i please get your four digit member id sure its 2043 okay and can i have the last four digits of your social security number yeah that is 1234 thank you for verification based on your account information your cobra coverage is provided through aetna and includes medical dental and vision benefits this coverage is essentially the same as what you had while you were actively employed including the same plan structure and provider network okay so it is exactly the same coverage yes that is correct the main difference is that you are now responsible for paying the full premium including any administrative fees okay how long can i keep this coverage cobra coverage typically lasts up to 18 months depending on your qualifying event and eligibility okay and how much does it cost the cost depends on your plan premium plus an administrative fee usually around two percent you can find exact cost details in the packet you received or i can help you retrieve that information okay that makes sense would you like to know about enrollment timelines or payment methods yeah maybe later for now i think this is enough okay is there anything else i can help you with today no thanks thank you for calling inspira financial have a nice day", "use_case": "COBRA Coverage FAQ", "target_lang": "en-US", "language": "en-US"}
-{"audio_filepath": "/workspace/data/audio_16k/profile_update.wav", "duration": 63.25, "text": "hi hello i would like to update my address on my account because i recently moved to a new place hello thank you for calling inspira financial i can help you with that but first i need to verify your identity can i get your four digit member id sure its 2043 okay and last four digits of your social security number yeah that is 1234 thank you for verification please provide the new address you would like to update in your account yeah my new address is 123 main street new york 11001 okay let me confirm your new address is 123 main street new york 11001 is that correct yes that is correct okay i have successfully updated your address your service request number is t k t a 9 3 f 3 c 7 2 please note that it may take up to 24 hours for the changes to reflect in your account okay thank you is there anything else i can help you with today no thanks thank you for calling inspira financial have a nice day", "use_case": "Profile Update", "target_lang": "en-US", "language": "en-US"}
-{"audio_filepath": "/workspace/data/audio_16k/card_delivery_status.wav", "duration": 89.16, "text": "hi hello yeah i wanted to check the status of my debit card that i ordered recently because i have not received it yet and it has been about a week or so hello thank you for calling inspira financial what can i help you with today sure i will help you with that but first i need to verify your identity can i please get your four digit member id sure its 2043 okay and can i have the last four digits of your social security number yeah that is 1234 thank you for confirming your identity i can see that your debit card was processed and dispatched on march 7th 2026 and it is currently in transit you should receive it within three to five business days okay but it has already been about a week and i still have not received it so i am a bit concerned yeah i understand your concern sometimes there can be delays due to postal service issues or regional factors unfortunately i do not see any specific delay reason in the system right now would you like me to create a service ticket so our team can investigate this further yes please go ahead okay i am creating a ticket now your ticket number is 4 8 2 9 1 5 i will repeat that 482915 our team will review the delivery status and get back to you via email or phone within a few business days okay thank you yeah sure is there anything else i can help you with today no that is all thank you okay thank you for calling inspira financial have a nice day", "use_case": "Card Delivery Status", "target_lang": "en-US", "language": "en-US"}
-{"audio_filepath": "/workspace/data/audio_16k/verification_code_issue.wav", "duration": 53.038, "text": "hi hello i am not receiving the verification code on my phone and because of that i am not able to log in to my account hello thank you for calling inspira financial i can help you with that but first i need to verify your identity can i get your four digit member id sure its 2043 okay and last four digits of your social security number yeah that is 1234 thank you for verification i will reset the alert on your account so you can receive the verification code please try logging in again would you like me to send the login link to your phone number ending in 4678 yes please okay the sms has been sent to your phone ending in 4678 please check your messages and try again okay i will check is there anything else i can help you with today no thanks thank you for calling inspira financial have a nice day", "use_case": "Verification Code Issue", "target_lang": "en-US", "language": "en-US"}
-root@c6f79d6e94db:/workspace# wc -l data/manifests/train_manifest.json
-5 data/manifests/train_manifest.json
-root@c6f79d6e94db:/workspace# wc -l data/manifests/val_manifest.json
-1 data/manifests/val_manifest.json
-root@c6f79d6e94db:/workspace# wc -l data/manifests/test_manifest.json
-1 data/manifests/test_manifest.json
-root@c6f79d6e94db:/workspace#
+def extract_text(x):
+    if isinstance(x, str):
+        return x
+    if isinstance(x, list) and x:
+        return extract_text(x[0])
+    if hasattr(x, "text"):
+        return x.text
+    if isinstance(x, dict):
+        return x.get("text") or str(x)
+    return str(x)
+
+
+def split_audio(wav_path, out_dir, chunk_sec):
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    existing = sorted(out_dir.glob("*.wav"))
+    if existing:
+        return existing
+
+    pattern = str(out_dir / f"{wav_path.stem}_%03d.wav")
+
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(wav_path),
+        "-f",
+        "segment",
+        "-segment_time",
+        str(chunk_sec),
+        "-reset_timestamps",
+        "1",
+        pattern,
+    ]
+
+    subprocess.run(cmd, check=True)
+    return sorted(out_dir.glob("*.wav"))
+
+
+def transcribe_chunk(model, wav_path, language):
+    try:
+        model.set_inference_prompt(language)
+    except Exception:
+        pass
+
+    with torch.no_grad():
+        out = model.transcribe([str(wav_path)], batch_size=1, verbose=False)
+
+    return clean_text(extract_text(out))
+
+
+def best_match_window(full_words, draft_words, cursor):
+    if not draft_words:
+        return cursor, min(cursor + 5, len(full_words)), 0.0
+
+    expected_len = len(draft_words)
+    min_len = max(3, int(expected_len * 0.6))
+    max_len = min(len(full_words), int(expected_len * 1.6) + 5)
+
+    search_start = max(0, cursor - 10)
+    search_end = min(len(full_words), cursor + expected_len + 80)
+
+    best_score = -1
+    best_start = cursor
+    best_end = min(cursor + expected_len, len(full_words))
+
+    draft_text = " ".join(draft_words)
+
+    for start in range(search_start, search_end):
+        for length in range(min_len, max_len + 1):
+            end = start + length
+            if end > len(full_words):
+                break
+
+            cand_text = " ".join(full_words[start:end])
+            score = SequenceMatcher(None, draft_text, cand_text).ratio()
+
+            if score > best_score:
+                best_score = score
+                best_start = start
+                best_end = end
+
+    return best_start, best_end, best_score
+
+
+def read_csv(csv_path):
+    rows = []
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for r in reader:
+            use_case = r.get("use_case") or r.get("Use Case") or r.get("UseCase")
+            transcript = r.get("transcript") or r.get("Transcript")
+            if use_case and transcript:
+                rows.append({
+                    "use_case": use_case.strip(),
+                    "transcript": transcript.strip(),
+                })
+    return rows
+
+
+def find_wav_for_use_case(use_case, wav_dir):
+    target = norm_name(use_case)
+
+    wavs = list(Path(wav_dir).glob("*.wav"))
+
+    for w in wavs:
+        if norm_name(w.stem) == target:
+            return w
+
+    for w in wavs:
+        if target in norm_name(w.stem) or norm_name(w.stem) in target:
+            return w
+
+    raise FileNotFoundError(f"No WAV found for use case: {use_case}")
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--csv", required=True)
+    parser.add_argument("--wav-dir", default="data/audio_16k")
+    parser.add_argument("--base-model", required=True)
+    parser.add_argument("--out-dir", default="data/aligned_chunks")
+    parser.add_argument("--manifest", default="data/manifests/aligned_chunk_manifest.json")
+    parser.add_argument("--audit", default="data/manifests/alignment_audit.csv")
+    parser.add_argument("--language", default="en-US")
+    parser.add_argument("--chunk-sec", type=int, default=10)
+    parser.add_argument("--min-score", type=float, default=0.20)
+    args = parser.parse_args()
+
+    patch_nemotron_prompt(args.language)
+
+    print("[load]", args.base_model)
+    model = nemo_asr.models.ASRModel.restore_from(args.base_model, map_location="cuda")
+    model = model.cuda()
+    model.eval()
+
+    csv_rows = read_csv(args.csv)
+
+    manifest_rows = []
+    audit_rows = []
+
+    for item in csv_rows:
+        use_case = item["use_case"]
+        full_text = clean_text(item["transcript"])
+        full_words = full_text.split()
+
+        wav = find_wav_for_use_case(use_case, args.wav_dir)
+        chunk_dir = Path(args.out_dir) / norm_name(use_case)
+
+        chunks = split_audio(wav, chunk_dir, args.chunk_sec)
+
+        print(f"\n[use_case] {use_case}")
+        print(f"[wav] {wav}")
+        print(f"[chunks] {len(chunks)}")
+
+        cursor = 0
+
+        for idx, chunk in enumerate(chunks):
+            dur = duration_sec(chunk)
+            if dur < 1.0:
+                continue
+
+            draft = transcribe_chunk(model, chunk, args.language)
+            draft_words = draft.split()
+
+            start, end, score = best_match_window(full_words, draft_words, cursor)
+
+            aligned_words = full_words[start:end]
+            aligned_text = " ".join(aligned_words)
+
+            if score < args.min_score:
+                print(f"[warn] low match score {score:.2f}: {chunk}")
+
+            cursor = max(end, cursor)
+
+            row = {
+                "audio_filepath": str(chunk.resolve()),
+                "duration": round(dur, 3),
+                "text": aligned_text,
+                "target_lang": args.language,
+                "language": args.language,
+                "use_case": use_case,
+                "match_score": round(score, 4),
+                "draft_asr": draft,
+            }
+
+            manifest_rows.append(row)
+
+            audit_rows.append({
+                "use_case": use_case,
+                "chunk": str(chunk),
+                "duration": round(dur, 3),
+                "match_score": round(score, 4),
+                "draft_asr": draft,
+                "aligned_text": aligned_text,
+            })
+
+            print(f"  {idx+1}/{len(chunks)} score={score:.2f} text={aligned_text[:80]}")
+
+    Path(args.manifest).parent.mkdir(parents=True, exist_ok=True)
+
+    with open(args.manifest, "w", encoding="utf-8") as f:
+        for r in manifest_rows:
+            clean_row = {
+                "audio_filepath": r["audio_filepath"],
+                "duration": r["duration"],
+                "text": r["text"],
+                "target_lang": r["target_lang"],
+                "language": r["language"],
+                "use_case": r["use_case"],
+            }
+            f.write(json.dumps(clean_row, ensure_ascii=False) + "\n")
+
+    with open(args.audit, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                "use_case",
+                "chunk",
+                "duration",
+                "match_score",
+                "draft_asr",
+                "aligned_text",
+            ],
+        )
+        writer.writeheader()
+        writer.writerows(audit_rows)
+
+    print("\n[done]")
+    print("manifest:", args.manifest)
+    print("audit:", args.audit)
+    print("rows:", len(manifest_rows))
+
+
+if __name__ == "__main__":
+    main()
+
+
+
+export CUDA_HOME=/usr/local/cuda-12.4
+export LD_LIBRARY_PATH=/usr/local/cuda-12.4/nvvm/lib64:$LD_LIBRARY_PATH
+unset NUMBA_CUDA_USE_NVIDIA_BINDING
+
+
+python3.11 scripts/auto_align_chunks_with_base_asr.py --csv data/inspira_transcripts.csv --wav-dir data/audio_16k --base-model /srv/nemotron-3.5-asr-streaming-0.6b.nemo --out-dir data/aligned_chunks --manifest data/manifests/aligned_chunk_manifest.json --audit data/manifests/alignment_audit.csv --language en-US --chunk-sec 10
+
+
+head -5 data/manifests/aligned_chunk_manifest.json
+
+
+python3.11 - <<'PY'
+import csv
+
+with open("data/manifests/alignment_audit.csv", encoding="utf-8") as f:
+    rows = list(csv.DictReader(f))
+
+bad = [r for r in rows if float(r["match_score"]) < 0.25]
+
+print("total rows:", len(rows))
+print("low score rows:", len(bad))
+
+for r in bad[:20]:
+    print("\nscore:", r["match_score"])
+    print("chunk:", r["chunk"])
+    print("draft:", r["draft_asr"])
+    print("aligned:", r["aligned_text"])
+PY
+
+
+
+
+nano scripts/split_aligned_manifest.py
+
+
+#!/usr/bin/env python3
+
+import json
+import random
+from pathlib import Path
+
+inp = Path("data/manifests/aligned_chunk_manifest.json")
+out = Path("data/manifests")
+
+rows = [
+    json.loads(line)
+    for line in inp.read_text(encoding="utf-8").splitlines()
+    if line.strip()
+]
+
+rows = [r for r in rows if r.get("text", "").strip()]
+
+random.seed(42)
+random.shuffle(rows)
+
+n = len(rows)
+train = rows[: int(n * 0.8)]
+val = rows[int(n * 0.8): int(n * 0.9)]
+test = rows[int(n * 0.9):]
+
+for name, data in [
+    ("train_aligned_manifest.json", train),
+    ("val_aligned_manifest.json", val),
+    ("test_aligned_manifest.json", test),
+]:
+    path = out / name
+    path.write_text(
+        "\n".join(json.dumps(r, ensure_ascii=False) for r in data) + "\n",
+        encoding="utf-8",
+    )
+    print(name, len(data))
+
+
+python3.11 scripts/split_aligned_manifest.py
+
+rm -f /srv/models/nemotron_inspira_decoder_ft.nemo
+
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export CUDA_HOME=/usr/local/cuda-12.4
+export LD_LIBRARY_PATH=/usr/local/cuda-12.4/nvvm/lib64:$LD_LIBRARY_PATH
+unset NUMBA_CUDA_USE_NVIDIA_BINDING
+
+python3.11 scripts/finetune_nemotron.py --train-manifest data/manifests/train_aligned_manifest.json --val-manifest data/manifests/val_aligned_manifest.json --base-model /srv/nemotron-3.5-asr-streaming-0.6b.nemo --output-nemo /srv/models/nemotron_inspira_proper_ft.nemo --freeze-mode decoder_only --max-epochs 3 --batch-size 1 --lr 5e-6 --language en-US --precision bf16-mixed
