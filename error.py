@@ -1,54 +1,84 @@
-python3.11 - <<'PY'
-import json, wave
-from pathlib import Path
+NeMo I 2026-06-25 11:24:35 wer:318]
 
-src = Path("data/audio_16k")
-out_dir = Path("data/audio_short")
-out_dir.mkdir(parents=True, exist_ok=True)
+[NeMo I 2026-06-25 11:24:35 wer:319] WER reference:hi hello thank you for calling inspira financial
+[NeMo I 2026-06-25 11:24:35 wer:320] WER predicted:New address you'd like to update in your account is one twenty three Stain
+Epoch 0:  84%|████████████████████████████████████████████████████████████████▉            | 70/83 [00:13<00:02,  5.36it/s, v_num=4][NeMo I 2026-06-25 11:24:36 wer:318]
 
-# Split into 8 sec chunks
-import subprocess
-for wav in src.glob("*.wav"):
-    base = wav.stem
-    subprocess.run([
-        "ffmpeg", "-y", "-i", str(wav),
-        "-f", "segment",
-        "-segment_time", "8",
-        "-c", "copy",
-        str(out_dir / f"{base}_%03d.wav")
-    ], check=True)
+[NeMo I 2026-06-25 11:24:36 wer:319] WER reference:hi hello thank you for calling inspira financial
+[NeMo I 2026-06-25 11:24:36 wer:320] WER predicted:To help you with that, you'll need to verify your identity. <en-US> Can I please get your four digit member ID? <en-US> Sure it's twenty forty three. <en-US>
+Epoch 0:  86%|█████████████████████████████████████████████████████████████████▊           | 71/83 [00:13<00:02,  5.37it/s, v_num=4][NeMo I 2026-06-25 11:24:36 wer:318]
 
-rows = []
-for wav in sorted(out_dir.glob("*.wav")):
-    with wave.open(str(wav), "rb") as w:
-        dur = w.getnframes() / w.getframerate()
-    if 0.5 <= dur <= 8.5:
-        rows.append({
-            "audio_filepath": str(wav.resolve()),
-            "duration": dur,
-            "text": "hi hello thank you for calling inspira financial",
-            "target_lang": "en-US",
-            "language": "en-US"
-        })
+[NeMo I 2026-06-25 11:24:36 wer:319] WER reference:hi hello thank you for calling inspira financial
+[NeMo I 2026-06-25 11:24:36 wer:320] WER predicted:Transaction at all okay since this transaction was made by you, I will create a support ticket to report this as an
+Epoch 0:  87%|██████████████████████████████████████████████████████████████████▊          | 72/83 [00:13<00:02,  5.38it/s, v_num=4][NeMo I 2026-06-25 11:24:36 wer:318]
 
-Path("data/manifests/train_8sec_manifest.json").write_text(
-    "\n".join(json.dumps(r) for r in rows) + "\n"
-)
+[NeMo I 2026-06-25 11:24:36 wer:319] WER reference:hi hello thank you for calling inspira financial
+[NeMo I 2026-06-25 11:24:36 wer:320] WER predicted:Can help you with that first I need to verify your identity. <en-US> Can I get your four member ID? <en-US> Sure, it's twenty forty three
+Epoch 0:  88%|███████████████████████████████████████████████████████████████████▋         | 73/83 [00:13<00:01,  5.40it/s, v_num=4][NeMo I 2026-06-25 11:24:36 wer:318]
 
-print("created rows:", len(rows))
-PY
+[NeMo I 2026-06-25 11:24:36 wer:319] WER reference:hi hello thank you for calling inspira financial
+[NeMo I 2026-06-25 11:24:36 wer:320] WER predicted:Okay, is there anything else I can help you with today? <en-US> No thanks. <en-US> Thank you for calling Inspira Financial Have a nice day. <en-US>
+Epoch 0:  89%|████████████████████████████████████████████████████████████████████▋        | 74/83 [00:13<00:01,  5.41it/s, v_num=4][NeMo I 2026-06-25 11:24:36 wer:318]
 
+[NeMo I 2026-06-25 11:24:36 wer:319] WER reference:hi hello thank you for calling inspira financial
+[NeMo I 2026-06-25 11:24:36 wer:320] WER predicted:Go ahead and block it immediately. <en-US> Okay, I am processing that new record has been fucking deactivated
+Epoch 0:  90%|█████████████████████████████████████████████████████████████████████▌       | 75/83 [00:13<00:01,  5.42it/s, v_num=4][NeMo I 2026-06-25 11:24:36 wer:318]
 
+[NeMo I 2026-06-25 11:24:36 wer:319] WER reference:hi hello thank you for calling inspira financial
+[NeMo I 2026-06-25 11:24:36 wer:320] WER predicted:That makes sense. <en-US> Would you like to know about enrollment timelines and payment models? <en-US> Yeah, maybe later for now I think this
+Epoch 0:  92%|██████████████████████████████████████████████████████████████████████▌      | 76/83 [00:13<00:01,  5.44it/s, v_num=4][NeMo I 2026-06-25 11:24:37 wer:318]
 
-PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-python3.11 scripts/finetune_nemotron.py \
-  --train-manifest data/manifests/train_8sec_manifest.json \
-  --val-manifest data/manifests/val_manifest.json \
-  --base-model /srv/nemotron-3.5-asr-streaming-0.6b.nemo \
-  --output-nemo /srv/models/nemotron_inspira_decoder_ft.nemo \
-  --freeze-mode decoder_only \
-  --max-epochs 1 \
-  --batch-size 1 \
-  --lr 5e-6 \
-  --language en-US \
-  --precision 32-true
+[NeMo I 2026-06-25 11:24:37 wer:319] WER reference:hi hello thank you for calling inspira financial
+[NeMo I 2026-06-25 11:24:37 wer:320] WER predicted:Before we proceed, I need to verify your identity. <en-US> Can I please get your four digit number ID four it's two zero
+Epoch 0:  93%|███████████████████████████████████████████████████████████████████████▍     | 77/83 [00:14<00:01,  5.45it/s, v_num=4][NeMo I 2026-06-25 11:24:37 wer:318]
+
+[NeMo I 2026-06-25 11:24:37 wer:319] WER reference:hi hello thank you for calling inspira financial
+[NeMo I 2026-06-25 11:24:37 wer:320] WER predicted:Okay, I used the latest transaction now the most recent transaction on your card ending in five zero nine one was a seven hundred
+Epoch 0:  94%|████████████████████████████████████████████████████████████████████████▎    | 78/83 [00:14<00:00,  5.46it/s, v_num=4][NeMo I 2026-06-25 11:24:37 wer:318]
+
+[NeMo I 2026-06-25 11:24:37 wer:319] WER reference:hi hello thank you for calling inspira financial
+[NeMo I 2026-06-25 11:24:37 wer:320] WER predicted:Right now would direct me to create a service ticket. <en-US> Team can investigate the weather. <en-US> You believe go ahead
+Epoch 0:  95%|█████████████████████████████████████████████████████████████████████████▎   | 79/83 [00:14<00:00,  5.47it/s, v_num=4][NeMo I 2026-06-25 11:24:37 wer:318]
+
+[NeMo I 2026-06-25 11:24:37 wer:319] WER reference:hi hello thank you for calling inspira financial
+[NeMo I 2026-06-25 11:24:37 wer:320] WER predicted:Okay, but it has already been about a week and I still have not received it since I'm a bit concerned. <en-US> Yeah, I
+Epoch 0:  96%|██████████████████████████████████████████████████████████████████████████▏  | 80/83 [00:14<00:00,  5.48it/s, v_num=4][NeMo I 2026-06-25 11:24:37 wer:318]
+
+[NeMo I 2026-06-25 11:24:37 wer:319] WER reference:hi hello thank you for calling inspira financial
+[NeMo I 2026-06-25 11:24:37 wer:320] WER predicted:Anotho used transaction your ticket number is TKT four five D four two E six B. <en-US> I will report that TKT four five D. <en-US>
+Epoch 0:  98%|███████████████████████████████████████████████████████████████████████████▏ | 81/83 [00:14<00:00,  5.50it/s, v_num=4][NeMo I 2026-06-25 11:24:37 wer:318]
+
+[NeMo I 2026-06-25 11:24:37 wer:319] WER reference:hi hello thank you for calling inspira financial
+[NeMo I 2026-06-25 11:24:37 wer:320] WER predicted:Based on your information, your cobra coverage is provided through EtNA and includes medical tools and vision benefits. <en-US> This coverage is essentially the same as what you
+Epoch 0:  99%|████████████████████████████████████████████████████████████████████████████ | 82/83 [00:14<00:00,  5.50it/s, v_num=4][NeMo I 2026-06-25 11:24:37 wer:318]
+
+[NeMo I 2026-06-25 11:24:37 wer:319] WER reference:hi hello thank you for calling inspira financial
+[NeMo I 2026-06-25 11:24:37 wer:320] WER predicted:Social security number that is twelve thirty four. <en-US> Thank you for confirming your identity. <en-US> I can see that
+Epoch 0: 100%|█████████████████████████████████████████████████████████████████████████████| 83/83 [00:15<00:00,  5.52it/s, v_num=4][NeMo I 2026-06-25 11:24:37 asr_model:185] CUDA graphs enabled for EncDecRNNTBPEModelWithPrompt::RNNTBPEDecoding::GreedyBatchedRNNTInfer
+                                                                                                                                    [NeMo W 2026-06-25 11:24:38 label_looping_base:165] Full CUDA graph compilation failed: CUDA failure! <cudaError_t.cudaErrorInsufficientDriver: 35>. Falling back to native PyTorch CUDA graphs. Decoding will be slower.
+[NeMo I 2026-06-25 11:24:40 wer:318]
+
+[NeMo I 2026-06-25 11:24:40 wer:319] WER reference:hi hello thank you for calling inspira financial what can i help you with today i would also like to withdraw money from my account to help you with that i ll need to verify your identity can i please get your four digit member id sure its 2043 great now may i have the last four digits of your social security number yeah that s 1234 thank you for verification for the money withdrawal i am generating a secure link a secure distribution link has been sent via sms to your phone number ending in 4678 please note that processing typically takes up to 5 business days a 25 closing fee applies and any applicable taxes or penalties will be reported on form 1099 is there anything else i can help you with today no thanks thank you have a nice day
+[NeMo I 2026-06-25 11:24:40 wer:320] WER predicted:Hi hello, thank you for calling Inspira Financial. <en-US> What can I help you with today? <en-US> I would like to withdraw money from my account to help you with that I'll need to verify your identity. <en-US> Can I please get your four digit member ID? <en-US> Sure, it's twenty forty three right now. <en-US> May I have the last four digits of your social security number that's twelve thirty four. <en-US> Thank you for verification for the money withdrawal I am generating a secure link a secure distribution link has been sent via SMS to your phone number ending in forty six seventy eight. <en-US> Please note that processing typically takes up to five business days a twenty five dollars closing fee applies and any applicable taxes or penalties will be reported on Form ten ninety nine is there anything else I can help you with today? <en-US> No thanks. <en-US> Thank you. <en-US> Have a nice day. <en-US>
+                                                                                                                                    [NeMo I 2026-06-25 11:24:40 asr_model:198] CUDA graphs disabled for EncDecRNNTBPEModelWithPrompt::RNNTBPEDecoding::GreedyBatchedRNNTInfer
+Epoch 0: 100%|█████████████████████████████████████████████████████████████████████████████| 83/83 [00:17<00:00,  4.77it/s, v_num=4][NeMo I 2026-06-25 11:24:40 asr_model:185] CUDA graphs enabled for EncDecRNNTBPEModelWithPrompt::RNNTBPEDecoding::GreedyBatchedRNNTInfer
+`Trainer.fit` stopped: `max_epochs=1` reached.
+Epoch 0: 100%|█████████████████████████████████████████████████████████████████████████████| 83/83 [00:17<00:00,  4.76it/s, v_num=4]
+[done] Fine-tuned model saved to: /srv/models/nemotron_inspira_decoder_ft.nemo
+root@c6f79d6e94db:/workspace# wc -l data/manifest/train_manifest.json
+wc: data/manifest/train_manifest.json: No such file or directory
+root@c6f79d6e94db:/workspace# wc -l data/manifests/train_manifest.json
+5 data/manifests/train_manifest.json
+root@c6f79d6e94db:/workspace# cat data/manifests/train_manifest.json
+{"audio_filepath": "/workspace/data/audio_16k/card_lost.wav", "duration": 191.208, "text": "hi hello yeah i am calling because i lost my inspira debit card yesterday evening somewhere around maybe six thirty or seven pm and i am not able to find it anywhere so i want to report it and make sure it is blocked immediately uh because i am worried someone else might use it hello thank you for calling inspira financial what can i help you with today i understand your concern and i will help you with this request before we proceed i need to verify your identity can i please get your four digit member id sure its two zero four three 2043 okay just to confirm your member id is 2 0 4 3 right yes that is correct great now may i have the last four digits of your social security number yeah that is one two three four 1234 thank you for confirming your identity you have been successfully verified now to proceed with your lost card request please provide the last four digits of the inspira card you lost yeah i think it is five zero nine one 5091 okay your card ending in 5 0 9 1 has been verified would you like me to proceed with deactivating this card now yes please go ahead and block it immediately okay i am processing that now your card has been successfully deactivated no further transactions can be made using this card okay that is good thank you now before we order a replacement would you like me to check your recent transactions to ensure there is no suspicious activity yes please check that i want to be sure okay i am checking your latest transaction now the most recent transaction on your card ending in 5 0 9 1 was a seven hundred dollar medical claim reimbursement that is 700 dollars can you confirm if this transaction was made by you no i did not make that transaction at all okay since this transaction was not made by you i will create a support ticket to report this as an unauthorized transaction your ticket number is t k t 4 5 d 4 2 e 6 b i will repeat that t k t 4 5 d 4 2 e 6 b please note this number for future reference yeah i got it thanks now would you like me to place an order for a replacement inspira debit card yes please i need a new card okay we have two options standard delivery which takes seven to ten business days and expedited delivery which takes two to three business days which one would you prefer standard delivery is fine okay i have placed the order your new card will arrive within seven to ten business days your service request number is t k t 9 d 3 8 1 7 d 6 i will repeat that t k t 9 d 3 8 1 7 d 6 once you receive the card please activate it through the app or call the activation number also i recommend monitoring your account for any unusual activity over the next few days yeah i will do that okay is there anything else i can help you with today no thanks that is all thank you for calling inspira financial have a nice day", "use_case": "Card Lost", "target_lang": "en-US", "language": "en-US"}
+{"audio_filepath": "/workspace/data/audio_16k/cobra_coverage_faq.wav", "duration": 97.224, "text": "hi hello i recently left my employer and i received a large packet in the mail regarding benefits and i am trying to understand my options especially related to cobra coverage hello thank you for calling inspira financial i can definitely help you with that but first i need to verify your identity can i please get your four digit member id sure its 2043 okay and can i have the last four digits of your social security number yeah that is 1234 thank you for verification based on your account information your cobra coverage is provided through aetna and includes medical dental and vision benefits this coverage is essentially the same as what you had while you were actively employed including the same plan structure and provider network okay so it is exactly the same coverage yes that is correct the main difference is that you are now responsible for paying the full premium including any administrative fees okay how long can i keep this coverage cobra coverage typically lasts up to 18 months depending on your qualifying event and eligibility okay and how much does it cost the cost depends on your plan premium plus an administrative fee usually around two percent you can find exact cost details in the packet you received or i can help you retrieve that information okay that makes sense would you like to know about enrollment timelines or payment methods yeah maybe later for now i think this is enough okay is there anything else i can help you with today no thanks thank you for calling inspira financial have a nice day", "use_case": "COBRA Coverage FAQ", "target_lang": "en-US", "language": "en-US"}
+{"audio_filepath": "/workspace/data/audio_16k/profile_update.wav", "duration": 63.25, "text": "hi hello i would like to update my address on my account because i recently moved to a new place hello thank you for calling inspira financial i can help you with that but first i need to verify your identity can i get your four digit member id sure its 2043 okay and last four digits of your social security number yeah that is 1234 thank you for verification please provide the new address you would like to update in your account yeah my new address is 123 main street new york 11001 okay let me confirm your new address is 123 main street new york 11001 is that correct yes that is correct okay i have successfully updated your address your service request number is t k t a 9 3 f 3 c 7 2 please note that it may take up to 24 hours for the changes to reflect in your account okay thank you is there anything else i can help you with today no thanks thank you for calling inspira financial have a nice day", "use_case": "Profile Update", "target_lang": "en-US", "language": "en-US"}
+{"audio_filepath": "/workspace/data/audio_16k/card_delivery_status.wav", "duration": 89.16, "text": "hi hello yeah i wanted to check the status of my debit card that i ordered recently because i have not received it yet and it has been about a week or so hello thank you for calling inspira financial what can i help you with today sure i will help you with that but first i need to verify your identity can i please get your four digit member id sure its 2043 okay and can i have the last four digits of your social security number yeah that is 1234 thank you for confirming your identity i can see that your debit card was processed and dispatched on march 7th 2026 and it is currently in transit you should receive it within three to five business days okay but it has already been about a week and i still have not received it so i am a bit concerned yeah i understand your concern sometimes there can be delays due to postal service issues or regional factors unfortunately i do not see any specific delay reason in the system right now would you like me to create a service ticket so our team can investigate this further yes please go ahead okay i am creating a ticket now your ticket number is 4 8 2 9 1 5 i will repeat that 482915 our team will review the delivery status and get back to you via email or phone within a few business days okay thank you yeah sure is there anything else i can help you with today no that is all thank you okay thank you for calling inspira financial have a nice day", "use_case": "Card Delivery Status", "target_lang": "en-US", "language": "en-US"}
+{"audio_filepath": "/workspace/data/audio_16k/verification_code_issue.wav", "duration": 53.038, "text": "hi hello i am not receiving the verification code on my phone and because of that i am not able to log in to my account hello thank you for calling inspira financial i can help you with that but first i need to verify your identity can i get your four digit member id sure its 2043 okay and last four digits of your social security number yeah that is 1234 thank you for verification i will reset the alert on your account so you can receive the verification code please try logging in again would you like me to send the login link to your phone number ending in 4678 yes please okay the sms has been sent to your phone ending in 4678 please check your messages and try again okay i will check is there anything else i can help you with today no thanks thank you for calling inspira financial have a nice day", "use_case": "Verification Code Issue", "target_lang": "en-US", "language": "en-US"}
+root@c6f79d6e94db:/workspace# wc -l data/manifests/train_manifest.json
+5 data/manifests/train_manifest.json
+root@c6f79d6e94db:/workspace# wc -l data/manifests/val_manifest.json
+1 data/manifests/val_manifest.json
+root@c6f79d6e94db:/workspace# wc -l data/manifests/test_manifest.json
+1 data/manifests/test_manifest.json
+root@c6f79d6e94db:/workspace#
