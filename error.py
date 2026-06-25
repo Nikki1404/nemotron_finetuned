@@ -1,36 +1,8 @@
-(venv) PS C:\Users\re_nikitav\Documents\nemotron_asr> python .\client.py --file C:\Users\re_nikitav\Downloads\audios\audios\audio_maria\maria7.mp3 --language en-US --realtime
-[warn] Health check failed: HTTP Error 404: Not Found  (server may still be starting)
-Traceback (most recent call last):
-  File "C:\Users\re_nikitav\Documents\nemotron_asr\client.py", line 322, in <module>
-    main()
-    ~~~~^^
-  File "C:\Users\re_nikitav\Documents\nemotron_asr\client.py", line 311, in main
-    asyncio.run(
-    ~~~~~~~~~~~^
-        run_file(
-        ^^^^^^^^^
-    ...<4 lines>...
-        )
-        ^
-    )
-    ^
-  File "C:\Program Files\Python313\Lib\asyncio\runners.py", line 195, in run
-    return runner.run(main)
-           ~~~~~~~~~~^^^^^^
-  File "C:\Program Files\Python313\Lib\asyncio\runners.py", line 118, in run
-    return self._loop.run_until_complete(task)
-           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
-  File "C:\Program Files\Python313\Lib\asyncio\base_events.py", line 725, in run_until_complete
-    return future.result()
-           ~~~~~~~~~~~~~^^
-  File "C:\Users\re_nikitav\Documents\nemotron_asr\client.py", line 160, in run_file
-    with wave.open(str(wav_path), "rb") as wf:
-         ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Program Files\Python313\Lib\wave.py", line 659, in open
-    return Wave_read(f)
-  File "C:\Program Files\Python313\Lib\wave.py", line 286, in __init__
-    self.initfp(f)
-    ~~~~~~~~~~~^^^
-  File "C:\Program Files\Python313\Lib\wave.py", line 253, in initfp
-    raise Error('file does not start with RIFF id')
-wave.Error: file does not start with RIFF id
+[partial] Unfortunately, we don't have real time tracking updates for individual drivers however most deliveries are completed by six[partial] Unfortunately, we don't have real time tracking updates for individual drivers however most deliveries are completed by six[partial] Unfortunately, we don't have real time tracking updates for individual drivers however most deliveries are completed by six[partial] Unfortunately, we don't have real time tracking updates for individual drivers however most deliveries are completed by six[final]  Unfortunately, we don't have real time tracking updates for individual drivers however most deliveries are completed by six pm so it's likely you'll receive it sometime this afternoon or early evening  (TTFB 537ms)
+[final]  You're welcome if you don't receive it by six pm you can always check the tracking number online for any updates  (TTFB 649ms)
+[final]  Would you like me to provide the link for that  (TTFB 453ms)
+[final]  Absolutely you can trap your package at wwweverist expeditions.com slash tracking using your tracking number  (TTFB 636ms)
+[partial] You're very welcome. <en-US> Have a wonderful    [info]
+File sent — waiting for final results...
+[partial] You're very welcome. <en-US> Have a wonderful day    [info]
+Done. Audio=78.8s  Wall=84.23s  RTF=1.07x
