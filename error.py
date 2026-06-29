@@ -301,3 +301,34 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+The available library NVIDIA-Nemo-Text-Processing works only for a few cases: https://ucgithub.exlservice.com/Kunal259787/utils-poc/tree/main/util/finite_state_machine_numbers/nvidia_nemo_text_processing
+
+
+We need to discuss how to deal with these ambiguities along with others:
+1. Year vs Numeric Interpretation: two thousand twenty six -> 2026 or 200026?
+2. one hundred two and three -> 105 or 1023?
+3. Leading zeros: zero zero seven -> 007 or 7?
+4. one and a half -> 1 and 0.5 or 1.5?
+5. currency: five dollars and twenty cents -> 5.2?
+
+After we decide on these ambiguities we can try dealing it with some kind of finite state machine.  Here are some sample code - https://ucgithub.exlservice.com/Kunal259787/utils-poc/tree/main/util/finite_state_machine_numbers (fsm.py or fsm_2.py)
+
+
+testing:
+- generate a large number of samples using AI
+- corpora:
+      - https://www.kaggle.com/datasets/joserzapata/free-spoken-digit-dataset-fsdd
+      - https://www.kaggle.com/datasets/renanaferreira/slurp-slu-resource-package
+      - https://huggingface.co/datasets/BeIR/fiqa
+- use random samples to verify using llm (either online/offline); if possible we can log each value to improve later
+- other cases:
+      - oh one seven -> 017
+      - double five -> 55
+      - decimals
+      - dates: march fifth twenty twenty six -> march 52026 is wrong
+      - range: hundred, thousand, million, billion, trillion, quadrillion, etc.
+- PIN, OTP, account number, room number, extension, ticket number (maybe concatenation helps here)
+- things, dollars, kilometers, people (maybe arithmetic handling will help here)
