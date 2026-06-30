@@ -1,1 +1,1 @@
-cd /home/CORP/re_nikitav/nemotron_finetuned && rsync -avz --progress --exclude 'ft_models/' --exclude 'lightning_logs/' --exclude '__pycache__/' --exclude '*.pyc' ./ <GCP_USER>@<GCP_EXTERNAL_IP>:~/nemotron_finetuned/
+cd /home/CORP/re_nikitav/nemotron_finetuned && rsync -avz --progress --exclude 'ft_models/' --exclude 'lightning_logs/' --exclude '__pycache__/' --exclude '*.pyc' ./ nikita_verma2@cx_speech:~/nemotron_finetuned/
