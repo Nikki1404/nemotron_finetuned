@@ -1,58 +1,42 @@
 #!/usr/bin/env python3
-"""
-client.py — Test client for the Nemotron 3.5 ASR WebSocket server.
-
-Modes:
-  1. Microphone (real-time)  →  python client.py --mic
-  2. WAV file                →  python client.py --file audio.wav
-  3. WAV file (simulated RT) →  python client.py --file audio.wav --realtime
-
-Language:
-  --language en-US   (default)
-  --language es-US   (Spanish US)
-  --language auto    (model auto-detects)
-
-Usage examples:
-  python client.py --mic
-  python client.py --mic --language es-US
-  python client.py --file speech.wav
-  python client.py --file speech_es.wav --language es-US
-  python client.py --file speech.wav --realtime --language auto
-"""
 
 import argparse
 import asyncio
 import json
+import re
 import sys
 import time
 import wave
 from pathlib import Path
+from urllib.parse import urlparse
 
 import websockets
 
-# ── Config ────────────────────────────────────────────────────────────────────
-SERVER_URL = "ws://nemotron-finetuned-150916788856.us-central1.run.app/asr/realtime-custom-vad"
+SERVER_URL = "wss://nemotron-finetuned-150916788856.us-central1.run.app/asr/realtime-custom-vad"
 SAMPLE_RATE = 16000
-CHUNK_MS = 100          # how many ms of audio to send per WS message
-CHUNK_BYTES = int(SAMPLE_RATE * CHUNK_MS / 1000) * 2   # int16 = 2 bytes/sample
+CHUNK_MS = 100
+CHUNK_BYTES = int(SAMPLE_RATE * CHUNK_MS / 1000) * 2
 
-
-# ── ANSI colours ──────────────────────────────────────────────────────────────
-GREEN  = "\033[92m"
+GREEN = "\033[92m"
 YELLOW = "\033[93m"
-CYAN   = "\033[96m"
-RESET  = "\033[0m"
-BOLD   = "\033[1m"
-DIM    = "\033[2m"
+CYAN = "\033[96m"
+RESET = "\033[0m"
+BOLD = "\033[1m"
+DIM = "\033[2m"
+
+_LANG_TAG_RE = re.compile(r"<[a-z]{2}-[A-Z]{2}>\s*")
+
+
+def clean_text(text: str) -> str:
+    return _LANG_TAG_RE.sub("", text or "").strip()
 
 
 def print_partial(text: str):
-    # Overwrite current line with partial
     sys.stdout.write(f"\r{YELLOW}[partial]{RESET} {text}    ")
     sys.stdout.flush()
 
 
-def print_final(text: str, ttfb_ms):
+def print_final(text: str, ttfb_ms=None):
     ttfb_str = f"  {DIM}(TTFB {ttfb_ms}ms){RESET}" if ttfb_ms else ""
     sys.stdout.write(f"\r{GREEN}{BOLD}[final]  {RESET}{GREEN}{text}{RESET}{ttfb_str}\n")
     sys.stdout.flush()
@@ -62,55 +46,171 @@ def print_info(msg: str):
     print(f"{CYAN}[info]{RESET} {msg}")
 
 
-# ── WebSocket receiver (runs concurrently) ────────────────────────────────────
 async def receive_loop(ws, stop_event: asyncio.Event):
-    """Print incoming transcript events until stop_event is set."""
+    last_partial = ""
+
     try:
         async for raw in ws:
             if isinstance(raw, bytes):
                 continue
+
             try:
                 msg = json.loads(raw)
             except json.JSONDecodeError:
                 continue
 
             ev_type = msg.get("type", "")
-            text    = msg.get("text", "")
-            ttfb    = msg.get("t_start")
+            text = clean_text(msg.get("text", ""))
+            ttfb = msg.get("t_start")
 
             if ev_type == "partial":
-                print_partial(text)
+                if text:
+                    last_partial = text
+                    print_partial(text)
+
             elif ev_type == "final":
-                print_final(text, ttfb)
+                if text:
+                    print_final(text, ttfb)
+                    last_partial = ""
+
+            elif ev_type == "done":
+                if last_partial:
+                    print_final(last_partial, None)
+                    last_partial = ""
+                stop_event.set()
+                break
+
             elif ev_type == "error":
                 print(f"\n[server error] {text}")
 
-    except websockets.exceptions.ConnectionClosedOK:
-        pass
     except Exception as e:
         print(f"\n[receive error] {e}")
+        if last_partial:
+            print_final(last_partial, None)
+
     finally:
         stop_event.set()
 
 
-# ── Microphone mode ───────────────────────────────────────────────────────────
+async def run_file(path: str, language: str, realtime: bool, url: str):
+    wav_path = Path(path)
+
+    if not wav_path.exists():
+        print(f"File not found: {path}")
+        sys.exit(1)
+
+    with wave.open(str(wav_path), "rb") as wf:
+        n_channels = wf.getnchannels()
+        sample_width = wf.getsampwidth()
+        file_sr = wf.getframerate()
+        n_frames = wf.getnframes()
+        raw_audio = wf.readframes(n_frames)
+
+    print_info(f"File: {wav_path.name}")
+    print_info(
+        f"Audio: {file_sr}Hz {n_channels}ch {sample_width * 8}bit "
+        f"{n_frames / file_sr:.1f}s"
+    )
+    print_info(f"Language: {language}")
+    print_info(f"Realtime simulation: {realtime}")
+    print_info(f"Connecting to {url}\n")
+
+    import numpy as np
+
+    audio_i16 = np.frombuffer(raw_audio, dtype=np.int16)
+
+    if n_channels == 2:
+        audio_i16 = audio_i16.reshape(-1, 2).mean(axis=1).astype(np.int16)
+
+    if file_sr != SAMPLE_RATE:
+        print_info(f"Resampling {file_sr}Hz → {SAMPLE_RATE}Hz")
+
+        try:
+            import resampy
+        except ImportError:
+            print("resampy not installed. Run: pip install resampy")
+            sys.exit(1)
+
+        audio_f32 = audio_i16.astype(np.float32) / 32768.0
+        audio_f32 = resampy.resample(audio_f32, file_sr, SAMPLE_RATE)
+        audio_i16 = (np.clip(audio_f32, -1.0, 1.0) * 32767).astype(np.int16)
+
+    raw_bytes = audio_i16.tobytes()
+    chunk_samples = int(SAMPLE_RATE * CHUNK_MS / 1000)
+    chunk_bytes = chunk_samples * 2
+
+    chunks = [
+        raw_bytes[i:i + chunk_bytes]
+        for i in range(0, len(raw_bytes), chunk_bytes)
+    ]
+
+    t_start = time.time()
+
+    async with websockets.connect(url, ping_interval=None) as ws:
+        await ws.send(json.dumps({
+            "backend": "nemotron",
+            "sample_rate": SAMPLE_RATE,
+            "language": language,
+        }))
+
+        stop_event = asyncio.Event()
+        recv_task = asyncio.create_task(receive_loop(ws, stop_event))
+
+        try:
+            for i, chunk in enumerate(chunks):
+                await ws.send(chunk)
+
+                if realtime:
+                    expected_elapsed = (i + 1) * CHUNK_MS / 1000.0
+                    actual_elapsed = time.time() - t_start
+                    sleep_for = expected_elapsed - actual_elapsed
+
+                    if sleep_for > 0:
+                        await asyncio.sleep(sleep_for)
+                else:
+                    await asyncio.sleep(0.001)
+
+        except KeyboardInterrupt:
+            print_info("Interrupted while sending audio")
+
+        print_info("\nFile sent — sending EOF and waiting for final results...")
+        await ws.send(json.dumps({"type": "eof"}))
+
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=60.0)
+        except asyncio.TimeoutError:
+            print_info("Timeout waiting for final response")
+
+        recv_task.cancel()
+
+        try:
+            await recv_task
+        except asyncio.CancelledError:
+            pass
+
+    elapsed = time.time() - t_start
+    audio_sec = len(audio_i16) / SAMPLE_RATE
+    rtf = elapsed / audio_sec if audio_sec > 0 else 0
+
+    print_info(f"\nDone. Audio={audio_sec:.1f}s Wall={elapsed:.2f}s RTF={rtf:.2f}x")
+
+
 async def run_mic(language: str, url: str):
     try:
         import sounddevice as sd
     except ImportError:
-        print("sounddevice not installed. Run:  pip install sounddevice")
+        print("sounddevice not installed. Run: pip install sounddevice")
         sys.exit(1)
 
     print_info(f"Connecting to {url}")
     print_info(f"Language: {language}")
     print_info("Speak into your microphone. Press Ctrl+C to stop.\n")
 
-    async with websockets.connect(url) as ws:
-        # Send init
+    async with websockets.connect(url, ping_interval=None) as ws:
         await ws.send(json.dumps({
-            "backend":     "nemotron",
+            "backend": "nemotron",
             "sample_rate": SAMPLE_RATE,
-            "language":    language,
+            "language": language,
         }))
 
         stop_event = asyncio.Event()
@@ -120,8 +220,6 @@ async def run_mic(language: str, url: str):
         queue: asyncio.Queue = asyncio.Queue()
 
         def audio_callback(indata, frames, time_info, status):
-            # Convert float32 → int16 → bytes
-            import numpy as np
             pcm = (indata[:, 0] * 32767).astype("int16").tobytes()
             loop.call_soon_threadsafe(queue.put_nowait, pcm)
 
@@ -139,252 +237,67 @@ async def run_mic(language: str, url: str):
                         await ws.send(pcm)
                     except asyncio.TimeoutError:
                         continue
-            except (KeyboardInterrupt, asyncio.CancelledError):
-                print("\n")
+            except KeyboardInterrupt:
                 print_info("Stopping...")
 
-        recv_task.cancel()
-        try:
-            await recv_task
-        except asyncio.CancelledError:
-            pass
-
-
-# ── WAV file mode ─────────────────────────────────────────────────────────────
-async def run_file(path: str, language: str, realtime: bool, url: str):
-    wav_path = Path(path)
-    if not wav_path.exists():
-        print(f"File not found: {path}")
-        sys.exit(1)
-
-    with wave.open(str(wav_path), "rb") as wf:
-        n_channels  = wf.getnchannels()
-        sample_width = wf.getsampwidth()
-        file_sr     = wf.getframerate()
-        n_frames    = wf.getnframes()
-        raw_audio   = wf.readframes(n_frames)
-
-    print_info(f"File: {wav_path.name}")
-    print_info(f"Audio: {file_sr}Hz  {n_channels}ch  {sample_width*8}bit  "
-               f"{n_frames/file_sr:.1f}s")
-    print_info(f"Language: {language}")
-    print_info(f"Realtime simulation: {realtime}")
-    print_info(f"Connecting to {url}\n")
-
-    # Convert stereo → mono if needed
-    import numpy as np
-    audio_i16 = np.frombuffer(raw_audio, dtype=np.int16)
-    if n_channels == 2:
-        audio_i16 = audio_i16.reshape(-1, 2).mean(axis=1).astype(np.int16)
-
-    # Resample to SAMPLE_RATE if needed
-    if file_sr != SAMPLE_RATE:
-        print_info(f"Resampling {file_sr}Hz → {SAMPLE_RATE}Hz")
-        try:
-            import resampy
-        except ImportError:
-            print("resampy not installed. Run:  pip install resampy")
-            sys.exit(1)
-        audio_f32 = audio_i16.astype(np.float32) / 32768.0
-        audio_f32 = resampy.resample(audio_f32, file_sr, SAMPLE_RATE)
-        audio_i16 = (np.clip(audio_f32, -1.0, 1.0) * 32767).astype(np.int16)
-
-    raw_bytes = audio_i16.tobytes()
-    chunk_samples = int(SAMPLE_RATE * CHUNK_MS / 1000)
-    chunk_bytes   = chunk_samples * 2
-    chunks = [raw_bytes[i:i + chunk_bytes] for i in range(0, len(raw_bytes), chunk_bytes)]
-
-    t_start = time.time()
-
-    async with websockets.connect(url) as ws:
-        await ws.send(json.dumps({
-            "backend":     "nemotron",
-            "sample_rate": SAMPLE_RATE,
-            "language":    language,
-        }))
-
-        stop_event = asyncio.Event()
-        recv_task  = asyncio.create_task(receive_loop(ws, stop_event))
+        await ws.send(json.dumps({"type": "eof"}))
 
         try:
-            for i, chunk in enumerate(chunks):
-                await ws.send(chunk)
-
-                if realtime:
-                    # Simulate real-time pacing
-                    expected_elapsed = (i + 1) * CHUNK_MS / 1000.0
-                    actual_elapsed   = time.time() - t_start
-                    sleep_for = expected_elapsed - actual_elapsed
-                    if sleep_for > 0:
-                        await asyncio.sleep(sleep_for)
-                else:
-                    # Small yield so receiver can print
-                    await asyncio.sleep(0.001)
-
-        except (KeyboardInterrupt, asyncio.CancelledError):
-            pass
-
-        # Wait a bit for remaining transcripts to arrive
-        print_info("\nFile sent — waiting for final results...")
-        try:
-            await asyncio.wait_for(stop_event.wait(), timeout=5.0)
+            await asyncio.wait_for(stop_event.wait(), timeout=60.0)
         except asyncio.TimeoutError:
-            pass
+            print_info("Timeout waiting for final response")
 
         recv_task.cancel()
+
         try:
             await recv_task
         except asyncio.CancelledError:
             pass
 
-    elapsed = time.time() - t_start
-    audio_sec = len(audio_i16) / SAMPLE_RATE
-    rtf = elapsed / audio_sec if audio_sec > 0 else 0
-    print_info(f"\nDone. Audio={audio_sec:.1f}s  Wall={elapsed:.2f}s  RTF={rtf:.2f}x")
 
-
-# ── Health check ──────────────────────────────────────────────────────────────
-async def check_health(host: str = "http://localhost:8002"):
+async def check_health(url: str):
     try:
         import urllib.request
-        with urllib.request.urlopen(f"{host}/health", timeout=3) as r:
+
+        parsed = urlparse(url)
+        http_host = f"{'https' if parsed.scheme == 'wss' else 'http'}://{parsed.netloc}"
+
+        with urllib.request.urlopen(f"{http_host}/health", timeout=5) as r:
             data = json.loads(r.read())
+
         print_info(f"Server health: {data}")
         return True
+
     except Exception as e:
-        print(f"[warn] Health check failed: {e}  (server may still be starting)")
+        print(f"[warn] Health check failed: {e} (server may still be starting)")
         return False
 
 
-# ── Entry point ───────────────────────────────────────────────────────────────
 def main():
-    parser = argparse.ArgumentParser(
-        description="Nemotron 3.5 ASR WebSocket test client",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__,
-    )
+    parser = argparse.ArgumentParser(description="Nemotron ASR WebSocket client")
 
     mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--mic",  action="store_true", help="Use microphone input")
-    mode.add_argument("--file", metavar="PATH",      help="Transcribe a WAV file")
+    mode.add_argument("--mic", action="store_true")
+    mode.add_argument("--file", metavar="PATH")
 
-    parser.add_argument(
-        "--language",
-        default="en-US",
-        help=(
-            "Language locale to use. Examples: en-US, en-GB, es-US, es-ES, "
-            "fr-FR, de-DE, hi-IN, ja-JP, auto. Default: en-US"
-        ),
-    )
-    parser.add_argument(
-        "--realtime",
-        action="store_true",
-        help="(file mode) Simulate real-time pacing instead of sending as fast as possible",
-    )
-    parser.add_argument(
-        "--url",
-        default=SERVER_URL,
-        help=f"WebSocket URL. Default: {SERVER_URL}",
-    )
-    parser.add_argument(
-        "--health",
-        action="store_true",
-        help="Just check server health and exit",
-    )
+    parser.add_argument("--language", default="en-US")
+    parser.add_argument("--realtime", action="store_true")
+    parser.add_argument("--url", default=SERVER_URL)
+    parser.add_argument("--health", action="store_true")
 
     args = parser.parse_args()
 
-    # Derive HTTP host from WS URL for health check
-    http_host = args.url.replace("ws://", "http://").replace("wss://", "https://")
-    http_host = http_host.rsplit("/", 1)[0]   # strip path
-
     if args.health:
-        asyncio.run(check_health(http_host))
+        asyncio.run(check_health(args.url))
         return
 
-    # Optionally ping health before connecting
-    asyncio.run(check_health(http_host))
+    asyncio.run(check_health(args.url))
 
     if args.mic:
-        asyncio.run(run_mic(language=args.language, url=args.url))
+        asyncio.run(run_mic(args.language, args.url))
     else:
-        asyncio.run(
-            run_file(
-                path=args.file,
-                language=args.language,
-                realtime=args.realtime,
-                url=args.url,
-            )
-        )
+        asyncio.run(run_file(args.file, args.language, args.realtime, args.url))
 
 
 if __name__ == "__main__":
     main()
-
-
-
-getting this error 
-(venv) PS C:\Users\re_nikitav\Documents\nemotron_finetuned> python client.py --file C:\Users\re_nikitav\Downloads\a.wav --realtime --language auto
-[warn] Health check failed: HTTP Error 404: Not Found  (server may still be starting)
-[info] File: a.wav
-[info] Audio: 24000Hz  1ch  16bit  78.8s
-[info] Language: auto
-[info] Realtime simulation: True
-[info] Connecting to ws://nemotron-finetuned-150916788856.us-central1.run.app/asr/realtime-custom-vad
-
-[info] Resampling 24000Hz → 16000Hz
-Traceback (most recent call last):
-  File "C:\Users\re_nikitav\Desktop\bu-digital-cx-speech-asr-realtime-custom-vad\scripts\venv\Lib\site-packages\websockets\asyncio\client.py", line 546, in __await_impl__
-    await self.connection.handshake(
-    ...<2 lines>...
-    )
-  File "C:\Users\re_nikitav\Desktop\bu-digital-cx-speech-asr-realtime-custom-vad\scripts\venv\Lib\site-packages\websockets\asyncio\client.py", line 115, in handshake
-    raise self.protocol.handshake_exc
-  File "C:\Users\re_nikitav\Desktop\bu-digital-cx-speech-asr-realtime-custom-vad\scripts\venv\Lib\site-packages\websockets\client.py", line 327, in parse
-    self.process_response(response)
-    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
-  File "C:\Users\re_nikitav\Desktop\bu-digital-cx-speech-asr-realtime-custom-vad\scripts\venv\Lib\site-packages\websockets\client.py", line 144, in process_response
-    raise InvalidStatus(response)
-websockets.exceptions.InvalidStatus: server rejected WebSocket connection: HTTP 302
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "C:\Users\re_nikitav\Documents\nemotron_finetuned\client.py", line 322, in <module>
-    main()
-    ~~~~^^
-  File "C:\Users\re_nikitav\Documents\nemotron_finetuned\client.py", line 311, in main
-    asyncio.run(
-    ~~~~~~~~~~~^
-        run_file(
-        ^^^^^^^^^
-    ...<4 lines>...
-        )
-        ^
-    )
-    ^
-  File "C:\Program Files\Python313\Lib\asyncio\runners.py", line 195, in run
-    return runner.run(main)
-           ~~~~~~~~~~^^^^^^
-  File "C:\Program Files\Python313\Lib\asyncio\runners.py", line 118, in run
-    return self._loop.run_until_complete(task)
-           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
-  File "C:\Program Files\Python313\Lib\asyncio\base_events.py", line 725, in run_until_complete
-    return future.result()
-           ~~~~~~~~~~~~~^^
-  File "C:\Users\re_nikitav\Documents\nemotron_finetuned\client.py", line 199, in run_file
-    async with websockets.connect(url) as ws:
-               ~~~~~~~~~~~~~~~~~~^^^^^
-  File "C:\Users\re_nikitav\Desktop\bu-digital-cx-speech-asr-realtime-custom-vad\scripts\venv\Lib\site-packages\websockets\asyncio\client.py", line 590, in __aenter__
-    return await self
-           ^^^^^^^^^^
-  File "C:\Users\re_nikitav\Desktop\bu-digital-cx-speech-asr-realtime-custom-vad\scripts\venv\Lib\site-packages\websockets\asyncio\client.py", line 562, in __await_impl__
-    uri_or_exc = self.process_redirect(exc)
-  File "C:\Users\re_nikitav\Desktop\bu-digital-cx-speech-asr-realtime-custom-vad\scripts\venv\Lib\site-packages\websockets\asyncio\client.py", line 497, in process_redirect
-    new_ws_uri = parse_uri(new_uri)
-  File "C:\Users\re_nikitav\Desktop\bu-digital-cx-speech-asr-realtime-custom-vad\scripts\venv\Lib\site-packages\websockets\uri.py", line 76, in parse_uri
-    raise InvalidURI(uri, "scheme isn't ws or wss")
-websockets.exceptions.InvalidURI: https://nemotron-finetuned-150916788856.us-central1.run.app/asr/realtime-custom-vad isn't a valid URI: scheme isn't ws or wss
-
-
-URL:https://nemotron-finetuned-150916788856.us-central1.run.app 
