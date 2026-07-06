@@ -23,3 +23,8 @@ cd /workspace && python3.11 scripts/compare_models_report.py --base results/hpar
 cp /srv/models/finetuned_nemotron_v1_lr3e6_ep2.nemo /srv/models/finetuned_nemotron_final.nemo && ls -lh /srv/models/finetuned_nemotron_final.nemo
 
 cd /home/CORP/re_nikitav/nemotron_finetuned && docker run --gpus all -it --rm -p 8003:8003 -v $PWD:/workspace -v $PWD/ft_models:/srv/models -e MODEL_NAME=/srv/models/finetuned_nemotron_final.nemo nemotron_finetuned uvicorn app.main:app --host 0.0.0.0 --port 8003
+
+ps -ef | grep -E "uvicorn|app.main" | grep -v grep
+python3.11 -c "import app.main,inspect; print(inspect.getfile(app.main))"
+grep -n "v1/audio/transcriptions\|realtime-custom-vad\|AUDIO_LOG_DIR" /workspace/app/main.py
+curl -s http://localhost:8003/
