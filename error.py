@@ -1,5 +1,7 @@
 https://nemotron-finetuned-150916788856.us-central1.run.app
 
+curl -X POST "https://nemotron-finetuned-150916788856.us-central1.run.app/v1/audio/transcriptions" -F "file=@a.wav" -F "model=nemotron-3.5-asr-streaming-0.6b" -F "language=auto"
+
 cd /home/CORP/re_nikitav/nemotron_finetuned && mkdir -p ft_models results/hparam_tuning
 
 cd /home/CORP/re_nikitav/nemotron_finetuned && docker run --gpus all -it --rm -v $PWD:/workspace -v $PWD/ft_models:/srv/models nemotron_finetuned bash
