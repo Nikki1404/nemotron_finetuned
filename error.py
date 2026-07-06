@@ -28,3 +28,23 @@ ps -ef | grep -E "uvicorn|app.main" | grep -v grep
 python3.11 -c "import app.main,inspect; print(inspect.getfile(app.main))"
 grep -n "v1/audio/transcriptions\|realtime-custom-vad\|AUDIO_LOG_DIR" /workspace/app/main.py
 curl -s http://localhost:8003/
+
+
+(base) root@EC03-E01-AICOE1:/home/CORP/re_nikitav# docker exec -it bcc6c2abcf6c bash
+root@bcc6c2abcf6c:/srv# ps -ef | grep -E "uvicorn|app.main" | grep -v grep
+root           1       0 18 16:15 pts/0    00:00:45 /usr/local/bin/python3.11 /usr/local/bin/uvicorn app.main:app --host 0.0.0.0 --port 8003
+root@bcc6c2abcf6c:/srv# python3.11 -c "import app.main,inspect; print(inspect.getfile(app.main))"
+DEBUG: Startup cfg.model_name='/srv/models/finetuned_nemotron_final.nemo' cfg.asr_backend='nemotron'
+/srv/app/main.py
+root@bcc6c2abcf6c:/srv# grep -n "v1/audio/transcriptions\|realtime-custom-vad\|AUDIO_LOG_DIR" /workspace/app/main.py
+41:AUDIO_LOG_DIR = Path(os.getenv("AUDIO_LOG_DIR", "/srv/audio_logs"))
+42:AUDIO_LOG_DIR.mkdir(parents=True, exist_ok=True)
+176:        "audio_log_dir": str(AUDIO_LOG_DIR),
+185:        "websocket_endpoint": "/asr/realtime-custom-vad",
+186:        "openai_transcription_endpoint": "/v1/audio/transcriptions",
+187:        "audio_log_dir": str(AUDIO_LOG_DIR),
+259:    Used by /v1/audio/transcriptions.
+264:    session_dir = AUDIO_LOG_DIR / session_id
+431:@app.post("/v1/audio/transcriptions")
+533:@app.websocket("/asr/realtime-custom-vad")
+540:    session_dir = AUDIO_LOG_DIR / session_id
