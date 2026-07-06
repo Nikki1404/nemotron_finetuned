@@ -1,16 +1,13 @@
-root@cx-apps:/home/nikita_verma2# curl -X POST "https://nemotron-finetuned-150916788856.us-central1.run.app/v1/audio/transcriptions" -F "file=@a.wav" -F "model=
-nemotron-3.5-asr-streaming-0.6b" -F "language=auto"
-{"detail":"Not Found"}root@cx-apps:/home/nikita_verma2# 
+cd /home/CORP/re_nikitav/nemotron_finetuned && mkdir -p ft_models results/hparam_tuning
 
+cd /home/CORP/re_nikitav/nemotron_finetuned && docker run --gpus all -it --rm -v $PWD:/workspace -v $PWD/ft_models:/srv/models nemotron_finetuned bash
 
-(base) root@EC03-E01-AICOE1:/home/CORP/re_nikitav/nemotron_finetuned/ft_models# cd ..
-(base) root@EC03-E01-AICOE1:/home/CORP/re_nikitav/nemotron_finetuned# ls
-01_enter_training_container.sh                      README.md                         ft_models         results_base.jsonl
-02_prepare_baseline_train_eval_inside_container.sh  README_FINE_TUNING_SAME_IMAGE.md  lightning_logs    results_base_full.jsonl
-03_run_finetuned_server.sh                          app                               raw_wavs          results_proper_ft_full.jsonl
-04_run_base_server.sh                               client.py                         requirements.txt  scripts
-Dockerfile                                          data                              results
-(base) root@EC03-E01-AICOE1:/home/CORP/re_nikitav/nemotron_finetuned# cd scripts/
-(base) root@EC03-E01-AICOE1:/home/CORP/re_nikitav/nemotron_finetuned/scripts# ls
-augment_train_manifest.py           compare_models_report.py  finetune_nemotron.py  run_hyparam_tuning.sh
-auto_align_chunks_with_base_asr.py  evaluate_manifest.py      prepare_dataset.py    split_aligned_manifest.py
+cd /workspace && mkdir -p /srv/models results/hparam_tuning && export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True && export CUDA_HOME=/usr/local/cuda-12.4 && export LD_LIBRARY_PATH=/usr/local/cuda-12.4/nvvm/lib64:$LD_LIBRARY_PATH && unset NUMBA_CUDA_USE_NVIDIA_BINDING
+
+cd /workspace && python3.11 scripts/augment_train_manifest.py --train-manifest data/manifests/train_aligned_manifest.json --out-manifest data/manifests/train_aligned_aug_manifest.json --out-audio-dir data/audio_aug --keep-original
+
+cd /workspace && python3.11 scripts/finetune_nemotron.py --train-manifest data/manifests/train_aligned_aug_manifest.json --val-manifest data/manifests/val_aligned_manifest.json --base-model /srv/nemotron-3.5-asr-streaming-0.6b.nemo --output-nemo /srv/models/finetuned_nemotron_v1_lr3e6_ep2.nemo --freeze-mode decoder_only --max-epochs 2 --batch-size 1 --lr 3e-6 --language en-US --precision bf16-mixed
+
+cp /srv/models/finetuned_nemotron_v1_lr3e6_ep2.nemo /srv/models/finetuned_nemotron_final.nemo && ls -lh /srv/models
+
+cd /workspace && python3.11 scripts/evaluate_manifest.py --model /srv/models/finetuned_nemotron_final.nemo --manifest data/manifests/test_aligned_manifest.json --language en-US --output-jsonl results/hparam_tuning/final_eval.jsonl
