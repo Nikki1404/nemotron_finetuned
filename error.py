@@ -1,5 +1,1 @@
-curl -X POST \
-  "https://nemotron-finetuned-150916788856.us-central1.run.app/v1/audio/transcriptions" \
-  -F "file=@audio.wav" \
-  -F "model=nemotron-3.5-asr-streaming-0.6b" \
-  -F "language=auto"
+curl -X POST "https://nemotron-finetuned-150916788856.us-central1.run.app/v1/audio/transcriptions" -F "file=@C:\Users\re_nikitav\Downloads\a.wav" -F "model=nemotron-3.5-asr-streaming-0.6b" -F "language=auto"
