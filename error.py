@@ -21,3 +21,5 @@ cd /workspace && export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True && expo
 cd /workspace && python3.11 scripts/compare_models_report.py --base results/hparam_tuning/base_eval.jsonl --v1 results/hparam_tuning/v1_eval.jsonl --v2 results/hparam_tuning/v2_eval.jsonl --v3 results/hparam_tuning/v3_eval.jsonl --out results/hparam_tuning/model_comparison_report.md
 
 cp /srv/models/finetuned_nemotron_v1_lr3e6_ep2.nemo /srv/models/finetuned_nemotron_final.nemo && ls -lh /srv/models/finetuned_nemotron_final.nemo
+
+cd /home/CORP/re_nikitav/nemotron_finetuned && docker run --gpus all -it --rm -p 8002:8002 -v $PWD:/workspace -v $PWD/ft_models:/srv/models -e MODEL_NAME=/srv/models/finetuned_nemotron_final.nemo nemotron_finetuned uvicorn app.main:app --host 0.0.0.0 --port 8002
