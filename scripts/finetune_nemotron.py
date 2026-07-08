@@ -1,18 +1,9 @@
 #!/usr/bin/env python3
-"""
-Fine-tune Nemotron 3.5 ASR Streaming 0.6B on a small NeMo manifest.
-
-This script is intentionally conservative for small data:
-  - decoder_only mode freezes encoder parameters
-  - low LR
-  - batch size 1
-  - saves a new .nemo model
-"""
-
 from __future__ import annotations
 
 import argparse
 import os
+import types
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +12,7 @@ def load_model(model_path: str, language: str):
     import nemo.collections.asr as nemo_asr
 
     cls = nemo_asr.models.EncDecRNNTBPEModelWithPrompt
+
     if model_path.endswith(".nemo") or Path(model_path).exists():
         model = cls.restore_from(model_path, map_location="cpu")
     else:
@@ -30,6 +22,12 @@ def load_model(model_path: str, language: str):
         model.set_inference_prompt(language)
     except Exception as e:
         print(f"[warn] set_inference_prompt({language}) failed: {e}")
+
+    try:
+        model.set_default_prompt(language)
+    except Exception as e:
+        print(f"[warn] set_default_prompt({language}) failed: {e}")
+
     return model
 
 
@@ -40,24 +38,18 @@ def set_freeze_mode(model: Any, freeze_mode: str) -> None:
         return
 
     if freeze_mode == "decoder_only":
-        # Freeze everything first
         for p in model.parameters():
             p.requires_grad = False
-        # Then unfreeze decoder/joint/prediction-style modules if present
-        names_to_train = ("decoder", "joint", "loss", "wer")
+
+        train_modules = ("decoder", "joint", "prompt_kernel")
+
         for name, module in model.named_modules():
-            if any(k in name.lower() for k in names_to_train):
-                for p in module.parameters(recurse=False):
-                    p.requires_grad = True
-        # Safer fallback: if no params got enabled, unfreeze non-encoder params
-        if not any(p.requires_grad for p in model.parameters()):
-            for name, p in model.named_parameters():
-                if not name.startswith("encoder."):
+            if any(k in name.lower() for k in train_modules):
+                for p in module.parameters(recurse=True):
                     p.requires_grad = True
         return
 
     if freeze_mode == "last_encoder":
-        # Train decoder/joint + last 20% encoder params by layer order where possible.
         set_freeze_mode(model, "decoder_only")
         enc_params = [(n, p) for n, p in model.named_parameters() if n.startswith("encoder.")]
         start = int(len(enc_params) * 0.8)
@@ -71,15 +63,62 @@ def set_freeze_mode(model: Any, freeze_mode: str) -> None:
 def count_trainable(model: Any) -> None:
     total = sum(p.numel() for p in model.parameters())
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"[params] total={total:,} trainable={trainable:,} ({trainable/max(1,total)*100:.2f}%)")
+    print(f"[params] total={total:,} trainable={trainable:,} ({trainable / max(1, total) * 100:.2f}%)")
+
+
+def get_prompt_index(model: Any, language: str) -> int:
+    prompt_dict = model.cfg.train_ds.prompt_dictionary
+    if language not in prompt_dict:
+        raise ValueError(f"Language {language} not in prompt dictionary")
+    return int(prompt_dict[language])
+
+
+def patch_batch_prompt_indices(model: Any, prompt_index: int) -> None:
+    old_training_step = model.training_step
+    old_validation_step = model.validation_step
+
+    def add_prompt(batch):
+        if isinstance(batch, (tuple, list)) and len(batch) == 4:
+            signal, signal_len, transcript, transcript_len = batch
+
+            import torch
+
+            prompt_indices = torch.full(
+                (signal.shape[0],),
+                prompt_index,
+                dtype=torch.long,
+                device=signal.device,
+            )
+
+            return signal, signal_len, transcript, transcript_len, prompt_indices
+
+        return batch
+
+    def new_training_step(self, batch, batch_idx):
+        batch = add_prompt(batch)
+        return old_training_step(batch, batch_idx)
+
+    def new_validation_step(self, batch, batch_idx, dataloader_idx=0):
+        batch = add_prompt(batch)
+        try:
+            return old_validation_step(batch, batch_idx, dataloader_idx)
+        except TypeError:
+            return old_validation_step(batch, batch_idx)
+
+    model.training_step = types.MethodType(new_training_step, model)
+    model.validation_step = types.MethodType(new_validation_step, model)
+
+    print(f"[patch] Added prompt_indices={prompt_index} when batch has only 4 items")
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+
     ap.add_argument("--train-manifest", required=True)
     ap.add_argument("--val-manifest", required=True)
-    ap.add_argument("--base-model", required=True, help="Base .nemo path or HF name")
+    ap.add_argument("--base-model", required=True)
     ap.add_argument("--output-nemo", required=True)
+
     ap.add_argument("--language", default="en-US")
     ap.add_argument("--freeze-mode", default="decoder_only", choices=["decoder_only", "last_encoder", "none"])
     ap.add_argument("--max-epochs", type=int, default=5)
@@ -87,7 +126,8 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=5e-6)
     ap.add_argument("--devices", type=int, default=1)
     ap.add_argument("--precision", default="bf16-mixed")
-    ap.add_argument("--num-workers", type=int, default=2)
+    ap.add_argument("--num-workers", type=int, default=0)
+
     args = ap.parse_args()
 
     import torch
@@ -95,10 +135,15 @@ def main() -> None:
     from omegaconf import OmegaConf
 
     model = load_model(args.base_model, args.language)
+
+    prompt_index = get_prompt_index(model, args.language)
+    print(f"[language] {args.language} prompt_index={prompt_index}")
+
     set_freeze_mode(model, args.freeze_mode)
     count_trainable(model)
 
-    # Conservative training/validation config. Avoids heavy bucketing complexity for tiny data.
+    patch_batch_prompt_indices(model, prompt_index)
+
     train_cfg = OmegaConf.create({
         "manifest_filepath": str(Path(args.train_manifest).resolve()),
         "sample_rate": 16000,
@@ -106,10 +151,12 @@ def main() -> None:
         "shuffle": True,
         "num_workers": args.num_workers,
         "pin_memory": True,
-        "max_duration": 120.0,
+        "max_duration": 9999.0,
         "min_duration": 0.1,
         "is_tarred": False,
+        "use_lhotse": False,
     })
+
     val_cfg = OmegaConf.create({
         "manifest_filepath": str(Path(args.val_manifest).resolve()),
         "sample_rate": 16000,
@@ -117,15 +164,15 @@ def main() -> None:
         "shuffle": False,
         "num_workers": args.num_workers,
         "pin_memory": True,
-        "max_duration": 120.0,
+        "max_duration": 9999.0,
         "min_duration": 0.1,
         "is_tarred": False,
+        "use_lhotse": False,
     })
 
     model.setup_training_data(train_data_config=train_cfg)
     model.setup_validation_data(val_data_config=val_cfg)
 
-    # Set optimizer config expected by NeMo ASR models.
     model.cfg.optim = OmegaConf.create({
         "name": "adamw",
         "lr": args.lr,
@@ -146,19 +193,21 @@ def main() -> None:
         gradient_clip_val=1.0,
         log_every_n_steps=1,
         enable_checkpointing=False,
+        num_sanity_val_steps=0,
     )
 
     model.set_trainer(trainer)
+
     print("[train] Starting fine-tuning...")
     trainer.fit(model)
 
     output = Path(args.output_nemo)
     output.parent.mkdir(parents=True, exist_ok=True)
+
     model.save_to(str(output))
     print(f"[done] Fine-tuned model saved to: {output}")
 
 
 if __name__ == "__main__":
-    # Prevent tokenizer parallelism warnings/noise in containers.
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
     main()
