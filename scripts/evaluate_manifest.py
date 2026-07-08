@@ -1,136 +1,97 @@
 #!/usr/bin/env python3
-"""Evaluate a Nemotron/NeMo ASR .nemo model on a NeMo manifest."""
-
-from __future__ import annotations
-
-import argparse
-import json
-import re
+import argparse, inspect, json, re
 from pathlib import Path
-from typing import Any, Dict, List
+import torch
+import nemo.collections.asr as nemo_asr
 
 
-def normalize_for_metric(s: str) -> str:
-    s = s.lower().strip()
-    s = re.sub(r"[^a-z0-9\s]", " ", s)
+def patch_prompt(default_lang: str):
+    import nemo.collections.asr.data.audio_to_text_lhotse_prompt_index as mod
+    for _, cls in vars(mod).items():
+        if inspect.isclass(cls) and hasattr(cls, "_get_prompt_index"):
+            old = cls._get_prompt_index
+            def patched(self, prompt_key, _old=old):
+                if prompt_key is None or str(prompt_key).lower() == "none":
+                    prompt_key = default_lang
+                return _old(self, prompt_key)
+            cls._get_prompt_index = patched
+    print(f"[patch] using default prompt language: {default_lang}")
+
+
+def norm(s):
+    s = (s or "").lower()
+    s = re.sub(r"[^a-z0-9ñáéíóúü\s]", " ", s)
     return re.sub(r"\s+", " ", s).strip()
 
 
-def edit_distance(a: List[str], b: List[str]) -> int:
-    dp = list(range(len(b) + 1))
-    for i, ca in enumerate(a, 1):
-        prev, dp[0] = dp[0], i
-        for j, cb in enumerate(b, 1):
-            old = dp[j]
-            dp[j] = min(dp[j] + 1, dp[j - 1] + 1, prev + (ca != cb))
-            prev = old
-    return dp[-1]
+def edit_distance(a, b):
+    dp = [[0]*(len(b)+1) for _ in range(len(a)+1)]
+    for i in range(len(a)+1): dp[i][0] = i
+    for j in range(len(b)+1): dp[0][j] = j
+    for i in range(1, len(a)+1):
+        for j in range(1, len(b)+1):
+            cost = 0 if a[i-1] == b[j-1] else 1
+            dp[i][j] = min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+cost)
+    return dp[-1][-1]
 
 
-def wer(ref: str, hyp: str) -> float:
-    r = normalize_for_metric(ref).split()
-    h = normalize_for_metric(hyp).split()
-    if not r:
-        return 0.0 if not h else 1.0
-    return edit_distance(r, h) / len(r)
+def wer(ref, hyp):
+    r, h = norm(ref).split(), norm(hyp).split()
+    return 0.0 if not r and not h else (100.0 if not r else 100.0*edit_distance(r, h)/len(r))
 
 
-def cer(ref: str, hyp: str) -> float:
-    r = list(normalize_for_metric(ref).replace(" ", ""))
-    h = list(normalize_for_metric(hyp).replace(" ", ""))
-    if not r:
-        return 0.0 if not h else 1.0
-    return edit_distance(r, h) / len(r)
+def cer(ref, hyp):
+    r, h = norm(ref).replace(" ", ""), norm(hyp).replace(" ", "")
+    return 0.0 if not r and not h else (100.0 if not r else 100.0*edit_distance(list(r), list(h))/len(r))
 
 
-def safe_text(x: Any) -> str:
-    if x is None:
-        return ""
-    if isinstance(x, str):
-        return x
-    if isinstance(x, (list, tuple)):
-        return safe_text(x[0]) if x else ""
-    if hasattr(x, "text"):
-        return str(x.text or "")
+def get_text(x):
+    if isinstance(x, str): return x
+    if isinstance(x, list) and x: return get_text(x[0])
+    if hasattr(x, "text"): return x.text
+    if isinstance(x, dict): return x.get("text") or x.get("pred_text") or str(x)
     return str(x)
 
 
-def load_model(model_path: str, device: str, language: str):
-    import torch
-    import nemo.collections.asr as nemo_asr
-
-    cls = nemo_asr.models.EncDecRNNTBPEModelWithPrompt
-    if model_path.endswith(".nemo") or Path(model_path).exists():
-        model = cls.restore_from(model_path, map_location="cpu")
-    else:
-        model = cls.from_pretrained(model_path, map_location="cpu")
-
-    model = model.cuda() if device == "cuda" and torch.cuda.is_available() else model.cpu()
-    try:
-        model.set_inference_prompt(language)
-    except Exception as e:
-        print(f"[warn] set_inference_prompt({language}) failed: {e}")
-    model.eval()
-    return model
-
-
-def main() -> None:
+def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", required=True, help=".nemo path or HF model name")
+    ap.add_argument("--model", required=True)
     ap.add_argument("--manifest", required=True)
     ap.add_argument("--language", default="en-US")
     ap.add_argument("--device", default="cuda")
-    ap.add_argument("--output", default="")
-    ap.add_argument("--output-jsonl", default="", help="Alias for --output")
-    ap.add_argument("--batch-size", type=int, default=1)
+    ap.add_argument("--output-jsonl", default="eval_predictions.jsonl")
     args = ap.parse_args()
 
-    manifest = Path(args.manifest)
-    rows: List[Dict] = [json.loads(line) for line in manifest.read_text(encoding="utf-8").splitlines() if line.strip()]
-    audio_files = [r["audio_filepath"] for r in rows]
+    patch_prompt(args.language)
+    rows = [json.loads(x) for x in Path(args.manifest).read_text().splitlines() if x.strip()]
+    print(f"[eval] Loading model: {args.model}")
+    model = nemo_asr.models.ASRModel.restore_from(args.model, map_location=args.device).to(args.device)
+    model.eval()
 
-    model = load_model(args.model, args.device, args.language)
-    print(f"[eval] Loaded model: {args.model}")
-    print(f"[eval] Files: {len(audio_files)}")
+    outputs, total_wer, total_cer = [], 0.0, 0.0
+    for i, row in enumerate(rows, 1):
+        audio = row["audio_filepath"]
+        lang = row.get("target_lang") or row.get("language") or args.language
+        try: model.set_default_prompt(lang)
+        except Exception: pass
+        try: model.set_inference_prompt(lang)
+        except Exception: pass
+        print(f"[eval] {i}/{len(rows)} {audio} lang={lang}")
+        with torch.no_grad():
+            hyp = get_text(model.transcribe([audio], batch_size=1, verbose=False))
+        ref = row.get("text", "")
+        w, c = wer(ref, hyp), cer(ref, hyp)
+        total_wer += w; total_cer += c
+        print(f"WER: {w:.2f}% | CER: {c:.2f}%")
+        print(f"PRED: {hyp[:300]}")
+        outputs.append({"audio_filepath": audio, "language": lang, "reference": ref, "prediction": hyp, "wer": w, "cer": c})
 
-    hyps = model.transcribe(audio_files, batch_size=args.batch_size)
-    results = []
-    wers, cers = [], []
-    for row, hyp_obj in zip(rows, hyps):
-        hyp = safe_text(hyp_obj)
-        ref = row["text"]
-        row_wer = wer(ref, hyp)
-        row_cer = cer(ref, hyp)
-        wers.append(row_wer)
-        cers.append(row_cer)
-        results.append({
-            "audio_filepath": row["audio_filepath"],
-            "use_case": row.get("use_case", ""),
-            "reference": ref,
-            "prediction": hyp,
-            "wer": row_wer,
-            "cer": row_cer,
-        })
-        print("\n---", row.get("use_case", Path(row["audio_filepath"]).name), "---")
-        print("REF:", ref[:500])
-        print("HYP:", hyp[:500])
-        print(f"WER: {row_wer*100:.2f}% | CER: {row_cer*100:.2f}%")
-
-    avg_wer = sum(wers) / max(1, len(wers))
-    avg_cer = sum(cers) / max(1, len(cers))
-    print("\n====================")
-    print(f"Average WER: {avg_wer*100:.2f}%")
-    print(f"Average CER: {avg_cer*100:.2f}%")
-    print("====================")
-
-    output_path = args.output_jsonl or args.output
-    out = Path(output_path) if output_path else manifest.with_suffix(".predictions.jsonl")
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with out.open("w", encoding="utf-8") as f:
-        for r in results:
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
-    print(f"Saved predictions: {out}")
-
+    Path(args.output_jsonl).write_text("\n".join(json.dumps(o, ensure_ascii=False) for o in outputs)+"\n")
+    print("\n========== SUMMARY ==========")
+    print(f"Files: {len(rows)}")
+    print(f"Average WER: {total_wer/max(1,len(rows)):.2f}%")
+    print(f"Average CER: {total_cer/max(1,len(rows)):.2f}%")
+    print(f"Saved predictions: {args.output_jsonl}")
 
 if __name__ == "__main__":
     main()
