@@ -6,4 +6,5 @@ docker run --gpus all -it --rm \
   -p 8003:8003 \
   -v "$PWD/ft_models":/srv/models \
   -e MODEL_NAME=/srv/models/nemotron_inspira_decoder_ft.nemo \
-  nemotron-asr
+  nemotron_finetuned
+  
