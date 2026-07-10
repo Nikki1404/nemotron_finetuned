@@ -37,3 +37,9 @@ curl -s http://localhost:8003/
 cd /home/CORP/re_nikitav/nemotron_finetuned && ls -lh ft_models/finetuned_nemotron_final.nemo
 cd /home/CORP/re_nikitav/nemotron_finetuned && docker build -t nemotron_finetuned .
 cd /home/CORP/re_nikitav/nemotron_finetuned && docker run --gpus all -it --rm -p 8003:8003 -v $PWD:/workspace -v $PWD/ft_models:/srv/models -e MODEL_NAME=/srv/models/finetuned_nemotron_final.nemo nemotron_finetuned uvicorn app.main:app --host 0.0.0.0 --port 8003
+
+Hi, I’m really sorry for the inconvenience, but there’s currently a power and network issue at my place, which is making it difficult for me to join the call properly.
+
+I completely understand that this may be a little urgent, and I sincerely apologize for having to request a reschedule. Would it be possible to push the call to first thing Monday morning? I’ll make sure to be available at your preferred time.
+
+Thank you so much for your understanding, and apologies again for the inconvenience.
