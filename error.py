@@ -1,45 +1,39 @@
-https://nemotron-finetuned-150916788856.us-central1.run.app
+(base) root@EC03-E01-AICOE1:/home/CORP/re_nikitav/nemotron_finetuned_updated# docker run --gpus all -it --rm -p 8003:8003 -v $PWD:/workspace -v $PWD/ft_models:/srv/models -e MODEL_NAME=/srv/models/finetuned_nemotron_final.nemo nemotron_finetuned uvicorn app.main:app --host 0.0.0.0 --port 8003
 
-curl -X POST "https://nemotron-finetuned-150916788856.us-central1.run.app/v1/audio/transcriptions" -F "file=@a.wav" -F "model=nemotron-3.5-asr-streaming-0.6b" -F "language=auto"
+==========
+== CUDA ==
+==========
 
-cd /home/CORP/re_nikitav/nemotron_finetuned && mkdir -p ft_models results/hparam_tuning
+CUDA Version 12.4.1
 
-cd /home/CORP/re_nikitav/nemotron_finetuned && docker run --gpus all -it --rm -v $PWD:/workspace -v $PWD/ft_models:/srv/models nemotron_finetuned bash
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 
-cd /workspace && mkdir -p /srv/models results/hparam_tuning && export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True && export CUDA_HOME=/usr/local/cuda-12.4 && export LD_LIBRARY_PATH=/usr/local/cuda-12.4/nvvm/lib64:$LD_LIBRARY_PATH && unset NUMBA_CUDA_USE_NVIDIA_BINDING
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
 
-cd /workspace && python3.11 scripts/augment_train_manifest.py --train-manifest data/manifests/train_aligned_manifest.json --out-manifest data/manifests/train_aligned_aug_manifest.json --out-audio-dir data/audio_aug --keep-original
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
 
-cd /workspace && python3.11 scripts/finetune_nemotron.py --train-manifest data/manifests/train_aligned_aug_manifest.json --val-manifest data/manifests/val_aligned_manifest.json --base-model /srv/nemotron-3.5-asr-streaming-0.6b.nemo --output-nemo /srv/models/finetuned_nemotron_v1_lr3e6_ep2.nemo --freeze-mode decoder_only --max-epochs 2 --batch-size 1 --lr 3e-6 --language en-US --precision bf16-mixed
-
-cp /srv/models/finetuned_nemotron_v1_lr3e6_ep2.nemo /srv/models/finetuned_nemotron_final.nemo && ls -lh /srv/models
-
-cd /workspace && python3.11 scripts/evaluate_manifest.py --model /srv/models/finetuned_nemotron_final.nemo --manifest data/manifests/test_aligned_manifest.json --language en-US --output-jsonl results/hparam_tuning/final_eval.jsonl
-
-cd /workspace && chmod +x scripts/run_hyparam_tuning.sh && bash scripts/run_hyparam_tuning.sh
-
-
-cd /workspace && export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True && export CUDA_HOME=/usr/local/cuda-12.4 && export LD_LIBRARY_PATH=/usr/local/cuda-12.4/nvvm/lib64:$LD_LIBRARY_PATH && unset NUMBA_CUDA_USE_NVIDIA_BINDING && mkdir -p /srv/models results/hparam_tuning && chmod +x scripts/run_hyparam_tuning.sh && bash scripts/run_hyparam_tuning.shs
-
-
-cd /workspace && python3.11 scripts/compare_models_report.py --base results/hparam_tuning/base_eval.jsonl --v1 results/hparam_tuning/v1_eval.jsonl --v2 results/hparam_tuning/v2_eval.jsonl --v3 results/hparam_tuning/v3_eval.jsonl --out results/hparam_tuning/model_comparison_report.md
-
-cp /srv/models/finetuned_nemotron_v1_lr3e6_ep2.nemo /srv/models/finetuned_nemotron_final.nemo && ls -lh /srv/models/finetuned_nemotron_final.nemo
-
-cd /home/CORP/re_nikitav/nemotron_finetuned && docker run --gpus all -it --rm -p 8003:8003 -v $PWD:/workspace -v $PWD/ft_models:/srv/models -e MODEL_NAME=/srv/models/finetuned_nemotron_final.nemo nemotron_finetuned uvicorn app.main:app --host 0.0.0.0 --port 8003
-
-ps -ef | grep -E "uvicorn|app.main" | grep -v grep
-python3.11 -c "import app.main,inspect; print(inspect.getfile(app.main))"
-grep -n "v1/audio/transcriptions\|realtime-custom-vad\|AUDIO_LOG_DIR" /workspace/app/main.py
-curl -s http://localhost:8003/
-
-
-cd /home/CORP/re_nikitav/nemotron_finetuned && ls -lh ft_models/finetuned_nemotron_final.nemo
-cd /home/CORP/re_nikitav/nemotron_finetuned && docker build -t nemotron_finetuned .
-cd /home/CORP/re_nikitav/nemotron_finetuned && docker run --gpus all -it --rm -p 8003:8003 -v $PWD:/workspace -v $PWD/ft_models:/srv/models -e MODEL_NAME=/srv/models/finetuned_nemotron_final.nemo nemotron_finetuned uvicorn app.main:app --host 0.0.0.0 --port 8003
-
-Hi, I’m really sorry for the inconvenience, but there’s currently a power and network issue at my place, which is making it difficult for me to join the call properly.
-
-I completely understand that this may be a little urgent, and I sincerely apologize for having to request a reschedule. Would it be possible to push the call to first thing Monday morning? I’ll make sure to be available at your preferred time.
-
-Thank you so much for your understanding, and apologies again for the inconvenience.
+DEBUG: Startup cfg.model_name='/srv/models/finetuned_nemotron_final.nemo' cfg.asr_backend='nemotron' sample_rate=16000 vad_frame_ms=20 vad_start_margin=1.5 vad_min_noise_rms=0.0015 pre_speech_ms=700 max_utt_ms=30000
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+2026-07-10 08:20:18,224 | INFO | asr_server | Server startup initiated
+2026-07-10 08:20:18,225 | INFO | asr_server | Preloading ASR engines...
+2026-07-10 08:20:18,225 | INFO | asr_server | Initializing engine: nemotron (/srv/models/finetuned_nemotron_final.nemo)
+2026-07-10 08:20:22,951 | WARNING | nv_one_logger.api.config | OneLogger: Setting error_handling_strategy to DISABLE_QUIETLY_AND_REPORT_METRIC_ERROR for rank (rank=0) with OneLogger disabled. To override: explicitly set error_handling_strategy parameter.
+2026-07-10 08:20:22,961 | INFO | nv_one_logger.exporter.export_config_manager | Final configuration contains 0 exporter(s)
+2026-07-10 08:20:22,961 | WARNING | nv_one_logger.training_telemetry.api.training_telemetry_provider | No exporters were provided. This means that no telemetry data will be collected.
+2026-07-10 08:20:25,031 | ERROR | asr_server | Failed to preload 'nemotron'
+Traceback (most recent call last):
+  File "/srv/app/main.py", line 142, in preload_engines
+    load_sec = engine.load()
+               ^^^^^^^^^^^^^
+  File "/srv/app/asr_engines/nemotron_asr.py", line 125, in load
+    self.model = nemo_asr.models.EncDecRNNTBPEModelWithPrompt.restore_from(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/nemo/collections/asr/models/rnnt_bpe_models_prompt.py", line 132, in restore_from
+    return EncDecRNNTBPEModel.restore_from(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/nemo/core/classes/modelPT.py", line 483, in restore_from
+    raise FileNotFoundError(f"Can't find {restore_path}")
+FileNotFoundError: Can't find /srv/models/finetuned_nemotron_final.nemo
